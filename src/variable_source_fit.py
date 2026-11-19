@@ -11,13 +11,16 @@ Ajustement direct par cellule (Adam), sans encodeur : on mesure ce que la repré
 Sources ajoutées par vagues aux maxima du résidu ; métriques enregistrées pour chaque K.
 
 Bras supplémentaires (ablation) : "diff_tau" (seul tau libre, w fixé) et "diff_w" (seul w libre, tau fixé),
-7 paramètres / source.  --seed > 0 : perturbe l'initialisation (test de robustesse aux redémarrages).
+7 paramètres / source.  Bras "diff7" : (x, y, A, a, b, θ, w), tau figé à 0.5, w sur une table à noeuds
+log-espacés (--w-min --w-max --n-w --tau7), construite à part (le tableau par défaut n'est pas modifié).
+--save-params : écrit les paramètres finaux par cellule.  --seed > 0 : perturbe l'initialisation (test de robustesse aux redémarrages).
 --sample : échantillon de cellules pré-construit (pickle), par ex. une autre saison.
 
 Usage : python variable_source_fit.py [--per-bin 40] [--iters 200] [--arms gauss diffusion] [--device cuda]
 """
 import argparse
 import json
+import logging
 import math
 import pickle
 import time
@@ -31,6 +34,8 @@ from scipy import ndimage as ndi
 
 from cell_delimitation import DATA_DIR, STRUCT_8, THRESHOLD_RAW, segment
 from cell_dataset import FILES, FRAME_STEP, MIN_AREA
+from profile_lut import (DEFAULT_N_W, L_LUT, LogWLutSpec, default_w_nodes, diffuse_profiles,
+                         load_or_build_logw_lut)
 
 OUT = Path(__file__).resolve().parent.parent / "results" / "03_variable_sources"
 MARGIN = 3  # pixels autour de la boîte englobante (cible = 0) : pénalise le débordement
@@ -39,10 +44,12 @@ BINS = [("50-200", 50, 200, 8), ("200-1000", 200, 1000, 24), ("1000-5000", 1000,
 GROUP = {"50-200": 40, "200-1000": 20, "1000-5000": 10, ">=5000": 4}  # cellules optimisées ensemble
 SCHEDULE = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]
 EPS = 1e-3
-ARM_NPAR = {"gauss": 6, "diffusion": 8, "diff_tau": 7, "diff_w": 7}
-ARM_FIXED = {"diff_tau": [7], "diff_w": [6]}  # colonnes gelées : 6 = tau, 7 = w (valeur fixe : sigmoid(0))
+ARM_NPAR = {"gauss": 6, "diffusion": 8, "diff_tau": 7, "diff_w": 7, "diff7": 7}
+ARM_FIXED = {"diff_tau": [7], "diff_w": [6], "diff7": [6]}  # colonnes gelées : 6 = tau, 7 = w (valeur fixe : sigmoid(0))
+# diff7 : tau figé (colonne 6 inutilisée : la table log-w n'a qu'une tranche tau = 0.5), w libre sur une table log-espacée
+LUT_DEPTH_ARMS = {"diff7": 1}  # bras dont la table a une seule tranche tau ; les autres bras diffusion en exigent > 1
+logger = logging.getLogger(__name__)
 DEVICE = torch.device("cpu")  # surchargé par --device
-L_LUT = 2.0  # le profil est défini pour r dans [0, L_LUT] (en rayons de la source), nul au-delà
 
 
 # ------------------------------------------------------------------ échantillon de cellules natives
@@ -90,35 +97,50 @@ def prepare_sample(per_bin, seed=0, files=None, test_only=True, name=None):
 
 
 # ------------------------------------------------------------------ table des profils de diffusion
-def build_profile_lut(n_tau=24, n_w=16, n_r=128, n=96, steps=1200, sigma0=0.15, floor=0.005, dmax=0.24):
-    path = OUT / "diffusion_profiles.pt"
+def build_profile_lut(n_tau=24, n_w=DEFAULT_N_W, n_r=128, n=96, steps=1200, sigma0=0.15, floor=0.005, dmax=0.24, out=None):
+    path = (OUT if out is None else Path(out)) / "diffusion_profiles.pt"
     if path.exists():
         return torch.load(path, map_location="cpu")
-    ax = (torch.arange(n) + 0.5) / n * 2 * L_LUT - L_LUT
-    Y, X = torch.meshgrid(ax, ax, indexing="ij")
-    R = torch.sqrt(X ** 2 + Y ** 2)
     taus = torch.linspace(0, 1, n_tau)
-    ws = torch.linspace(0.02, 0.5, n_w)
-    D = dmax * (taus[:, None, None, None] * torch.sigmoid((1 - R) / ws[None, :, None, None]) + floor)
-    D = D.reshape(-1, 1, n, n)  # D en unités de grille (dt/h^2 absorbé), stable car D <= 0.25
-    u = torch.exp(-R ** 2 / (2 * sigma0 ** 2)).expand(D.shape[0], 1, n, n).clone()
-    Dx, Dy = 0.5 * (D[..., :, 1:] + D[..., :, :-1]), 0.5 * (D[..., 1:, :] + D[..., :-1, :])
-    for _ in range(steps):  # diffusion explicite conservative, flux nul au bord
-        fx = Dx * (u[..., :, 1:] - u[..., :, :-1])
-        fy = Dy * (u[..., 1:, :] - u[..., :-1, :])
-        u = u + F.pad(fx, (0, 1)) - F.pad(fx, (1, 0)) + F.pad(fy, (0, 0, 0, 1)) - F.pad(fy, (0, 0, 1, 0))
-    # profil radial moyenné sur 32 directions
-    r = torch.linspace(0, L_LUT, n_r)
-    ang = torch.linspace(0, 2 * math.pi, 33)[:-1]
-    gx = (r[None, :] * torch.cos(ang[:, None])) / L_LUT
-    gy = (r[None, :] * torch.sin(ang[:, None])) / L_LUT
-    grid = torch.stack([gx, gy], -1)[None].expand(u.shape[0], -1, -1, -1)
-    prof = F.grid_sample(u, grid, align_corners=False).mean(2)[:, 0]  # (n_tau*n_w, n_r)
-    prof = prof / prof.max(1, keepdim=True).values
-    prof[:, -1] = 0
+    ws = default_w_nodes(n_w)
+    prof = diffuse_profiles(taus, ws, n_r, n, steps, sigma0, floor, dmax, L_LUT)
     lut = prof.reshape(n_tau, n_w, n_r)
+    path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(lut, path)
     return lut
+
+
+def lut_for_arm(arm: str, out: Path, spec: LogWLutSpec) -> torch.Tensor | None:
+    """Table (1, 1, n_tau, n_w, n_r) sur DEVICE pour un bras : table par défaut (diffusion, diff_tau, diff_w),
+    table log-w (diff7), None pour gauss."""
+    if arm not in ARM_NPAR:
+        raise ValueError(f"bras inconnu : {arm}")
+    if arm == "gauss":
+        return None
+    if arm == "diff7":
+        lut = load_or_build_logw_lut(spec, out)["lut"]
+    else:
+        lut = build_profile_lut(out=out)
+    return lut[None, None].to(DEVICE)
+
+
+def check_lut_depth(kind: str, lut5: torch.Tensor | None) -> None:
+    """diff7 exige une table à une seule tranche tau ; les autres bras diffusion une table à plusieurs tranches."""
+    if kind == "gauss":
+        return
+    if lut5 is None:
+        raise ValueError(f"bras {kind} : table de profils absente")
+    depth = lut5.shape[2]
+    if kind in LUT_DEPTH_ARMS and depth != LUT_DEPTH_ARMS[kind]:
+        raise ValueError(f"bras {kind} : table à {LUT_DEPTH_ARMS[kind]} tranche tau attendue, reçu {depth}")
+    if kind not in LUT_DEPTH_ARMS and depth <= 1:
+        raise ValueError(f"bras {kind} : table à plusieurs tranches tau attendue (profondeur {depth}), la table log-w est réservée à diff7")
+
+
+def params_by_cell(cells: list[dict], params: torch.Tensor, active: torch.Tensor) -> dict[int, np.ndarray]:
+    """{id de cellule : copie (K_actif, P) des paramètres des sources actives}."""
+    p, a = params.detach().cpu().numpy(), active.detach().cpu().numpy()
+    return {c["id"]: p[b][a[b] > 0].copy() for b, c in enumerate(cells)}
 
 
 # ------------------------------------------------------------------ rendu
@@ -212,8 +234,9 @@ def metrics(rec, T, valid):
 
 # ------------------------------------------------------------------ ajustement d'un groupe de cellules
 def fit_group(cells, kind, kmax, iters, lut5, snap_k=(), rng=None):
-    """kind : gauss | diffusion | diff_tau | diff_w.  rng : perturbation de l'initialisation (ou None).
+    """kind : gauss | diffusion | diff_tau | diff_w | diff7.  rng : perturbation de l'initialisation (ou None).
     Retourne (enregistrements par K, images, paramètres finaux (B, kmax, P) et masque actif, sur CPU)."""
+    check_lut_depth(kind, lut5)
     rkind = "gauss" if kind == "gauss" else "diffusion"
     frozen = ARM_FIXED.get(kind, [])
     B = len(cells)
@@ -317,7 +340,7 @@ def summarize(df):
     return t1, t2
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser()
     ap.add_argument("--per-bin", type=int, default=40)
     ap.add_argument("--iters", type=int, default=200)
@@ -327,49 +350,103 @@ def main():
     ap.add_argument("--out", default=str(OUT), help="dossier des résultats (contient l'échantillon en cache)")
     ap.add_argument("--sample", default=None, help="échantillon pré-construit (pickle) au lieu de --per-bin")
     ap.add_argument("--seed", type=int, default=0, help="> 0 : initialisation perturbée (redémarrage)")
-    args = ap.parse_args()
+    d = LogWLutSpec()  # table log-w du bras diff7
+    ap.add_argument("--w-min", type=float, default=d.w_min, help="diff7 : plus petit w de la table")
+    ap.add_argument("--w-max", type=float, default=d.w_max, help="diff7 : plus grand w de la table")
+    ap.add_argument("--n-w", type=int, default=d.n_w, help="diff7 : nombre de noeuds w (log-espacés)")
+    ap.add_argument("--tau7", type=float, default=d.tau, help="diff7 : tau fixe de la table")
+    ap.add_argument("--save-params", action="store_true", help="écrit params_<classe>_<bras>.pkl (K final)")
+    ap.add_argument("--max-per-bin", type=int, default=None, help="garde les N premières cellules par classe")
+    return ap
+
+
+def limit_per_bin(sample: list[dict], max_per_bin: int | None) -> list[dict]:
+    """Garde les `max_per_bin` premières cellules de chaque classe (None : tout)."""
+    if max_per_bin is None:
+        return list(sample)
+    if max_per_bin < 1:
+        raise ValueError(f"--max-per-bin doit être >= 1, reçu {max_per_bin}")
+    seen, kept = {}, []
+    for c in sample:
+        seen[c["bin"]] = seen.get(c["bin"], 0) + 1
+        if seen[c["bin"]] <= max_per_bin:
+            kept.append(c)
+    return kept
+
+
+def build_luts(args: argparse.Namespace, spec: LogWLutSpec) -> dict[str, torch.Tensor | None]:
+    """One table per kind needed by args.arms: "log-w" (diff7) and/or "default"; each built once."""
+    t0 = time.time()
+    luts: dict[str, torch.Tensor | None] = {}  # (1, 1, tau, w, r)
+    for arm in args.arms:
+        key = "log-w" if arm == "diff7" else "default"
+        if key in luts:
+            continue
+        # tables are built per arm; the old main always built the default table, even for gauss-only runs
+        luts[key] = lut_for_arm(arm, OUT, spec)
+        if luts[key] is not None:
+            logger.info("table %s %s (%.0fs)%s", key, tuple(luts[key].shape[2:]), time.time() - t0,
+                        f" clé {spec.key()}" if arm == "diff7" else "")
+    return luts
+
+
+def fit_bin(name: str, kmax: int, group: list[dict], args: argparse.Namespace, luts: dict,
+            rng: np.random.Generator | None, snaps: dict) -> list[dict]:
+    """Fit every arm on the cells of one size class; saves params (if asked), updates `snaps`; returns records."""
+    records: list[dict] = []
+    for arm in args.arms:
+        t0, saved = time.time(), {}
+        lut5 = luts["log-w" if arm == "diff7" else "default"]
+        for g0 in range(0, len(group), GROUP[name]):
+            gr = group[g0:g0 + GROUP[name]]
+            snap_k = (6, 8, 12, 16) if g0 == 0 else ()
+            rec, sn, (prm, act) = fit_group(gr, arm, kmax, args.iters, lut5, snap_k, rng)
+            records += rec
+            saved.update(params_by_cell(gr, prm, act))
+            for K, img in sn.items():
+                snaps[(name, arm, K)] = img
+            if g0 == 0:
+                snaps[(name, "target")] = gr[0]["rate"]
+        print(f"  {name:10s} {arm:9s} terminé ({time.time() - t0:.0f}s)", flush=True)
+        if args.save_params:
+            (OUT / f"params_{bin_slug(name)}_{arm}.pkl").write_bytes(pickle.dumps(saved))
+    return records
+
+
+def write_summaries() -> None:
+    """Résumé sur toutes les classes déjà calculées (fichiers fits_<classe>.csv)."""
+    df = pd.concat([pd.read_csv(OUT / f"fits_{bin_slug(b[0])}.csv") for b in BINS
+                    if (OUT / f"fits_{bin_slug(b[0])}.csv").exists()], ignore_index=True)
+    t1, t2 = summarize(df)
+    t1.to_csv(OUT / "summary_equal_params.csv", index=False)
+    t2.to_csv(OUT / "summary_params_needed.csv", index=False)
+
+
+def main() -> None:
+    args = build_parser().parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     globals()["OUT"] = Path(args.out)
     globals()["DEVICE"] = torch.device(args.device)
     print("device :", DEVICE, flush=True)
     OUT.mkdir(exist_ok=True, parents=True)
     torch.manual_seed(0)
     sample = pickle.loads(Path(args.sample).read_bytes()) if args.sample else prepare_sample(args.per_bin)
+    sample = limit_per_bin(sample, args.max_per_bin)
     rng = np.random.default_rng(args.seed) if args.seed > 0 else None
     for k, c in enumerate(sample):
         c["id"] = k
     print(f"{len(sample)} cellules :", pd.Series([c['bin'] for c in sample]).value_counts().to_dict(), flush=True)
-    t0 = time.time()
-    lut = build_profile_lut()
-    lut5 = lut[None, None].to(DEVICE)  # (1, 1, tau, w, r)
-    print(f"table des profils de diffusion {tuple(lut.shape)} ({time.time() - t0:.0f}s)", flush=True)
-
+    luts = build_luts(args, LogWLutSpec(w_min=args.w_min, w_max=args.w_max, n_w=args.n_w, tau=args.tau7))
     snap_path = OUT / "snapshots.pkl"
     snaps = pickle.loads(snap_path.read_bytes()) if snap_path.exists() else {}
     for name, lo, hi, kmax in BINS:
         if name not in args.bins:
             continue
-        records = []
         group = [c for c in sample if c["bin"] == name]
-        for arm in args.arms:
-            t0 = time.time()
-            for g0 in range(0, len(group), GROUP[name]):
-                gr = group[g0:g0 + GROUP[name]]
-                snap_k = (6, 8, 12, 16) if g0 == 0 else ()
-                rec, sn, _ = fit_group(gr, arm, kmax, args.iters, lut5, snap_k, rng)
-                records += rec
-                for K, img in sn.items():
-                    snaps[(name, arm, K)] = img
-                if g0 == 0:
-                    snaps[(name, "target")] = gr[0]["rate"]
-            print(f"  {name:10s} {arm:9s} terminé ({time.time() - t0:.0f}s)", flush=True)
+        records = fit_bin(name, kmax, group, args, luts, rng, snaps)
         pd.DataFrame(records).to_csv(OUT / f"fits_{bin_slug(name)}.csv", index=False)
         snap_path.write_bytes(pickle.dumps(snaps))
-    # résumé sur toutes les classes déjà calculées (fichiers fits_<classe>.csv)
-    df = pd.concat([pd.read_csv(OUT / f"fits_{bin_slug(b[0])}.csv") for b in BINS
-                    if (OUT / f"fits_{bin_slug(b[0])}.csv").exists()], ignore_index=True)
-    t1, t2 = summarize(df)
-    t1.to_csv(OUT / "summary_equal_params.csv", index=False)
-    t2.to_csv(OUT / "summary_params_needed.csv", index=False)
+    write_summaries()
 
 
 if __name__ == "__main__":

@@ -90,13 +90,16 @@ def descriptors(params, active, cell, kind):
     th = torch.where(swap, th + math.pi / 2, th)
     cols = [(p[:, 0] - lcx) / r_eq, (p[:, 1] - lcy) / r_eq, torch.log(F.softplus(p[:, 2])),
             torch.log(ra / r_eq), torch.log(rb / r_eq), th]
-    if kind != "gauss":
+    if kind == "diff7":  # tau figé : seule la netteté w est un descripteur
+        cols += [torch.sigmoid(p[:, 7])]
+    elif kind != "gauss":
         cols += [torch.sigmoid(p[:, 6]), torch.sigmoid(p[:, 7])]
     return torch.stack(cols, 1).numpy()
 
 
 NAMES = {"gauss": ["x", "y", "logA", "log_a", "log_b", "angle"],
-         "diffusion": ["x", "y", "logA", "log_a", "log_b", "angle", "tau", "w"]}
+         "diffusion": ["x", "y", "logA", "log_a", "log_b", "angle", "tau", "w"],
+         "diff7": ["x", "y", "logA", "log_a", "log_b", "angle", "w"]}
 
 
 def match(D0, D1):
