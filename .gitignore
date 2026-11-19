@@ -1,11 +1,14 @@
 # Raw MeteoNet radar data (5.6 GB) — download separately, see README
-DATA/
+/DATA/
 
 # Large intermediate inputs, rebuilt by scripts/build_samples.py
 results/**/cells.npz
 results/**/sample_*.pkl
 results/**/stability_pairs_*.pkl
 results/**/diffusion_profiles*.pt
+
+# Local development and smoke runs
+results/dev/
 
 # Same payloads must never be committed under archive/
 archive/**/diffusion_profiles*.pt
