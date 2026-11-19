@@ -5,7 +5,13 @@ DATA/
 results/**/cells.npz
 results/**/sample_*.pkl
 results/**/stability_pairs_*.pkl
-results/**/diffusion_profiles.pt
+results/**/diffusion_profiles*.pt
+
+# Same payloads must never be committed under archive/
+archive/**/diffusion_profiles*.pt
+archive/**/sample_*.pkl
+archive/**/stability_pairs_*.pkl
+archive/**/cells.npz
 
 # Exported sample grids (tools/export_excel.py)
 tools/samples/*.xlsx

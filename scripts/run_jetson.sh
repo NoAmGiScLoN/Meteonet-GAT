@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Sorties de ce run archivées dans archive/E2_variable_sources/02_jetson_baseline/results ; relancer depuis le tag v0-jetson-baseline.
+# Une relance écrit dans results/04_jetson_run : make_figures.py lit l'archive, copier les sorties dans archive/ pour les utiliser.
 # Lance sur le GPU du Jetson tous les tests en attente, en une seule session.
 #   1. Sources de taille variable : gauss vs diffusion, 4 classes de taille x 40 cellules (janv./juil. 2016)
 #   2. Stabilité temporelle : même cellule à t et t + 5 min (25 paires par classe)

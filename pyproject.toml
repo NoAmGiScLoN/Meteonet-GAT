@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+pythonpath = ["src", "scripts"]
+testpaths = ["tests"]
+markers = [
+    "unit: tests rapides, sans données externes",
+    "integration: tests qui lisent le dépôt (git, fichiers archivés)",
+]
