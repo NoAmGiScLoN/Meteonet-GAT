@@ -1,0 +1,7 @@
+# Tested with Python 3.12 (Jetson) and 3.15 (Mac).
+numpy
+scipy
+pandas
+matplotlib
+torch          # Jetson: install from https://download.pytorch.org/whl/cu132 (see README)
+openpyxl       # only for tools/export_excel.py

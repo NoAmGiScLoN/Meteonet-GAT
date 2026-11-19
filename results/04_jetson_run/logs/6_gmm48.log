@@ -1,0 +1,9 @@
+device : cuda
+train 8986 cellules, test 2888 cellules (jours > 7)
+    gmm d=48 ep 1/25 train mse 0.8897 (7s)
+    gmm d=48 ep 6/25 train mse 0.6224 (14s)
+    gmm d=48 ep 11/25 train mse 0.6224 (20s)
+    gmm d=48 ep 16/25 train mse 0.6224 (27s)
+    gmm d=48 ep 21/25 train mse 0.6224 (34s)
+    gmm d=48 ep 25/25 train mse 0.6224 (39s)
+gmm        d= 48  nrmse 1.000  mass_err 1.000  IoU 0.000  peak_err 1.000  (43s)

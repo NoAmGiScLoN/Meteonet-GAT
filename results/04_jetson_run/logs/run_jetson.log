@@ -1,0 +1,322 @@
+nohup: ignoring input
+torch 2.15.0+cu132 | numpy 2.5.5 | CUDA : True
+GPU : Orin
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+
+=== 1_principal — début 10:15 ===
+device : cuda
+160 cellules : {'50-200': 40, '200-1000': 40, '1000-5000': 40, '>=5000': 40}
+table des profils de diffusion (24, 16, 128) (0s)
+  50-200     gauss     terminé (72s)
+  50-200     diffusion terminé (73s)
+  200-1000   gauss     terminé (236s)
+  200-1000   diffusion terminé (245s)
+  1000-5000  gauss     terminé (569s)
+  1000-5000  diffusion terminé (614s)
+  >=5000     gauss     terminé (1766s)
+  >=5000     diffusion terminé (1733s)
+
+=== Erreur médiane (nrmse sur sqrt(taux)) à nombre de paramètres égal ===
+      bin  n_params  gauss_K  gauss_nrmse  gauss_iou  diff_K  diff_nrmse  diff_iou  diff_better_frac
+   50-200        24        4        0.296      0.655       3       0.218     0.825             0.950
+   50-200        48        8        0.239      0.725       6       0.137     0.895             1.000
+ 200-1000        24        4        0.316      0.669       3       0.292     0.781             0.700
+ 200-1000        48        8        0.255      0.738       6       0.213     0.835             0.925
+ 200-1000        96       16        0.204      0.786      12       0.146     0.894             0.975
+1000-5000        24        4        0.397      0.639       3       0.436     0.663             0.350
+1000-5000        48        8        0.319      0.699       6       0.321     0.767             0.425
+1000-5000        96       16        0.247      0.759      12       0.233     0.829             0.700
+1000-5000       192       32        0.196      0.807      24       0.173     0.875             0.925
+   >=5000        24        4        0.514      0.529       3       0.621     0.481             0.175
+   >=5000        48        8        0.417      0.645       6       0.450     0.648             0.175
+   >=5000        96       16        0.325      0.714      12       0.343     0.753             0.225
+   >=5000       192       32        0.247      0.778      24       0.242     0.823             0.400
+   >=5000       384       64        0.194      0.823      48       0.182     0.868             0.625
+
+=== Paramètres nécessaires pour atteindre une erreur cible (médiane sur les cellules ; % atteint) ===
+      bin       arm    <= 0.3    <= 0.2   <= 0.15
+   50-200     gauss  24 (92%)  48 (22%)   48 (5%)
+   50-200 diffusion 16 (100%)  32 (95%)  48 (85%)
+ 200-1000     gauss 36 (100%)  96 (78%) 120 (15%)
+ 200-1000 diffusion 24 (100%) 64 (100%) 96 (100%)
+1000-5000     gauss  72 (98%) 192 (80%) 288 (30%)
+1000-5000 diffusion 64 (100%) 128 (92%) 256 (80%)
+   >=5000     gauss 144 (98%) 288 (55%)  384 (2%)
+   >=5000 diffusion 128 (98%) 384 (78%) 512 (42%)
+
+=== Erreur médiane par nombre de sources K (tous les bras, y compris l'ablation) ===
+arm           diffusion  gauss
+bin       K                   
+1000-5000 3       0.436  0.433
+          6       0.321  0.341
+          12      0.233  0.270
+          24      0.173  0.220
+          48      0.120  0.167
+200-1000  3       0.292  0.339
+          6       0.213  0.282
+          12      0.146  0.224
+          24      0.085  0.172
+50-200    3       0.218  0.318
+          6       0.137  0.259
+>=5000    3       0.621  0.581
+          6       0.450  0.448
+          12      0.343  0.364
+          24      0.242  0.281
+          48      0.182  0.213
+=== 1_principal — fin 11:43 ===
+
+=== 2_stabilite — début 11:43 ===
+device : cuda
+  50-200     gauss     terminé (82s)
+  50-200     diffusion terminé (85s)
+  200-1000   gauss     terminé (190s)
+  200-1000   diffusion terminé (206s)
+  1000-5000  gauss     terminé (407s)
+  1000-5000  diffusion terminé (421s)
+  >=5000     gauss     terminé (1682s)
+  >=5000     diffusion terminé (1615s)
+
+=== Stabilité : écart médian entre ensembles de sources (même cellule à 5 min vs cellules différentes) ===
+                      K   n  nrmse  cost_same  cost_other  ratio
+bin       arm                                                   
+1000-5000 diffusion  12  25  0.222      1.282       2.697  0.475
+          gauss      12  25  0.255      0.937       2.361  0.397
+200-1000  diffusion   6  25  0.214      1.460       2.651  0.551
+          gauss       6  25  0.268      1.173       2.259  0.519
+50-200    diffusion   3  25  0.246      1.145       2.062  0.555
+          gauss       3  25  0.315      0.565       1.810  0.312
+>=5000    diffusion  24  25  0.283      1.182       3.894  0.304
+          gauss      24  25  0.312      1.043       4.173  0.250
+
+=== Écart absolu moyen par paramètre, même cellule (médiane sur les paires) ===
+                       d_x    d_y  d_logA  d_log_a  d_log_b  d_angle  d_tau    d_w
+bin       arm                                                                     
+1000-5000 diffusion  0.318  0.235   0.362    0.279    0.313    0.168  0.208  0.180
+          gauss      0.329  0.240   0.297    0.329    0.234    0.128    NaN    NaN
+200-1000  diffusion  0.433  0.241   0.370    0.279    0.306    0.205  0.176  0.194
+          gauss      0.278  0.205   0.367    0.279    0.284    0.093    NaN    NaN
+50-200    diffusion  0.321  0.143   0.220    0.164    0.202    0.063  0.121  0.114
+          gauss      0.311  0.116   0.225    0.262    0.211    0.038    NaN    NaN
+>=5000    diffusion  0.299  0.228   0.382    0.278    0.242    0.170  0.167  0.209
+          gauss      0.289  0.260   0.307    0.309    0.283    0.155    NaN    NaN
+=== 2_stabilite — fin 13:01 ===
+
+=== 3_ablation — début 13:01 ===
+device : cuda
+160 cellules : {'50-200': 40, '200-1000': 40, '1000-5000': 40, '>=5000': 40}
+table des profils de diffusion (24, 16, 128) (0s)
+  50-200     diff_tau  terminé (81s)
+  50-200     diff_w    terminé (87s)
+  200-1000   diff_tau  terminé (277s)
+  200-1000   diff_w    terminé (273s)
+  1000-5000  diff_tau  terminé (644s)
+  1000-5000  diff_w    terminé (689s)
+  >=5000     diff_tau  terminé (1775s)
+  >=5000     diff_w    terminé (1856s)
+
+=== Erreur médiane (nrmse sur sqrt(taux)) à nombre de paramètres égal ===
+Empty DataFrame
+Columns: []
+Index: []
+
+=== Paramètres nécessaires pour atteindre une erreur cible (médiane sur les cellules ; % atteint) ===
+      bin      arm     <= 0.3    <= 0.2   <= 0.15
+   50-200 diff_tau  14 (100%)  42 (90%)  42 (57%)
+   50-200   diff_w  14 (100%)  28 (95%)  42 (85%)
+ 200-1000 diff_tau  21 (100%) 84 (100%) 112 (80%)
+ 200-1000   diff_w  21 (100%) 56 (100%)  84 (95%)
+1000-5000 diff_tau  56 (100%) 168 (92%) 224 (75%)
+1000-5000   diff_w  56 (100%) 140 (95%) 224 (78%)
+   >=5000 diff_tau  168 (98%) 336 (72%) 448 (25%)
+   >=5000   diff_w 168 (100%) 336 (75%) 448 (38%)
+
+=== Erreur médiane par nombre de sources K (tous les bras, y compris l'ablation) ===
+arm           diff_tau  diff_w
+bin       K                   
+1000-5000 3      0.441   0.437
+          6      0.322   0.314
+          12     0.254   0.233
+          24     0.184   0.171
+          48     0.132   0.120
+200-1000  3      0.289   0.293
+          6      0.222   0.212
+          12     0.168   0.149
+          24     0.108   0.089
+50-200    3      0.240   0.222
+          6      0.172   0.143
+>=5000    3      0.627   0.641
+          6      0.467   0.456
+          12     0.343   0.358
+          24     0.249   0.257
+          48     0.187   0.185
+=== 3_ablation — fin 14:36 ===
+
+=== 4_saison2017 — début 14:36 ===
+device : cuda
+160 cellules : {'50-200': 40, '200-1000': 40, '1000-5000': 40, '>=5000': 40}
+table des profils de diffusion (24, 16, 128) (0s)
+  50-200     gauss     terminé (72s)
+  50-200     diffusion terminé (74s)
+  200-1000   gauss     terminé (219s)
+  200-1000   diffusion terminé (244s)
+  1000-5000  gauss     terminé (627s)
+  1000-5000  diffusion terminé (615s)
+  >=5000     gauss     terminé (1974s)
+  >=5000     diffusion terminé (1944s)
+
+=== Erreur médiane (nrmse sur sqrt(taux)) à nombre de paramètres égal ===
+      bin  n_params  gauss_K  gauss_nrmse  gauss_iou  diff_K  diff_nrmse  diff_iou  diff_better_frac
+   50-200        24        4        0.310      0.635       3       0.258     0.780             0.750
+   50-200        48        8        0.241      0.731       6       0.181     0.869             0.925
+ 200-1000        24        4        0.366      0.654       3       0.361     0.741             0.500
+ 200-1000        48        8        0.271      0.737       6       0.258     0.837             0.675
+ 200-1000        96       16        0.223      0.786      12       0.178     0.890             0.850
+1000-5000        24        4        0.455      0.577       3       0.511     0.536             0.225
+1000-5000        48        8        0.373      0.652       6       0.402     0.697             0.250
+1000-5000        96       16        0.288      0.728      12       0.294     0.788             0.475
+1000-5000       192       32        0.227      0.788      24       0.214     0.844             0.675
+   >=5000        24        4        0.512      0.576       3       0.573     0.507             0.075
+   >=5000        48        8        0.416      0.646       6       0.450     0.655             0.150
+   >=5000        96       16        0.334      0.713      12       0.348     0.735             0.150
+   >=5000       192       32        0.269      0.764      24       0.286     0.806             0.275
+   >=5000       384       64        0.215      0.807      48       0.217     0.847             0.450
+
+=== Paramètres nécessaires pour atteindre une erreur cible (médiane sur les cellules ; % atteint) ===
+      bin       arm    <= 0.3    <= 0.2   <= 0.15
+   50-200     gauss  24 (82%)  48 (18%)   36 (2%)
+   50-200 diffusion  24 (98%)  48 (82%)  48 (60%)
+ 200-1000     gauss  48 (98%) 120 (65%) 144 (18%)
+ 200-1000 diffusion 48 (100%)  96 (95%) 128 (75%)
+1000-5000     gauss  96 (98%) 240 (50%) 192 (12%)
+1000-5000 diffusion  96 (98%) 192 (78%) 256 (52%)
+   >=5000     gauss 144 (92%) 384 (35%)  384 (8%)
+   >=5000 diffusion 192 (95%) 384 (57%) 448 (15%)
+
+=== Erreur médiane par nombre de sources K (tous les bras, y compris l'ablation) ===
+arm           diffusion  gauss
+bin       K                   
+1000-5000 3       0.511  0.499
+          6       0.402  0.404
+          12      0.294  0.316
+          24      0.214  0.252
+          48      0.142  0.198
+200-1000  3       0.361  0.398
+          6       0.258  0.306
+          12      0.178  0.244
+          24      0.118  0.185
+50-200    3       0.258  0.331
+          6       0.181  0.266
+>=5000    3       0.573  0.559
+          6       0.450  0.461
+          12      0.348  0.367
+          24      0.286  0.298
+          48      0.217  0.241
+=== 4_saison2017 — fin 16:13 ===
+
+=== 5_redemarrage — début 16:13 ===
+device : cuda
+160 cellules : {'50-200': 40, '200-1000': 40, '1000-5000': 40, '>=5000': 40}
+table des profils de diffusion (24, 16, 128) (0s)
+  50-200     gauss     terminé (78s)
+  50-200     diffusion terminé (86s)
+  200-1000   gauss     terminé (254s)
+  200-1000   diffusion terminé (275s)
+  1000-5000  gauss     terminé (616s)
+  1000-5000  diffusion terminé (660s)
+  >=5000     gauss     terminé (1819s)
+  >=5000     diffusion terminé (1825s)
+
+=== Erreur médiane (nrmse sur sqrt(taux)) à nombre de paramètres égal ===
+      bin  n_params  gauss_K  gauss_nrmse  gauss_iou  diff_K  diff_nrmse  diff_iou  diff_better_frac
+   50-200        24        4        0.293      0.649       3       0.217     0.828             0.950
+   50-200        48        8        0.232      0.726       6       0.136     0.884             1.000
+ 200-1000        24        4        0.316      0.672       3       0.285     0.777             0.650
+ 200-1000        48        8        0.257      0.729       6       0.223     0.837             0.850
+ 200-1000        96       16        0.203      0.789      12       0.143     0.895             0.975
+1000-5000        24        4        0.392      0.629       3       0.442     0.660             0.425
+1000-5000        48        8        0.318      0.697       6       0.319     0.775             0.425
+1000-5000        96       16        0.247      0.750      12       0.241     0.825             0.650
+1000-5000       192       32        0.198      0.805      24       0.177     0.878             0.850
+   >=5000        24        4        0.507      0.533       3       0.639     0.468             0.125
+   >=5000        48        8        0.420      0.646       6       0.455     0.646             0.150
+   >=5000        96       16        0.322      0.717      12       0.342     0.749             0.225
+   >=5000       192       32        0.243      0.780      24       0.248     0.826             0.275
+   >=5000       384       64        0.193      0.826      48       0.187     0.867             0.600
+
+=== Paramètres nécessaires pour atteindre une erreur cible (médiane sur les cellules ; % atteint) ===
+      bin       arm    <= 0.3    <= 0.2   <= 0.15
+   50-200     gauss  24 (88%)  48 (25%)    - (0%)
+   50-200 diffusion 16 (100%)  32 (92%)  48 (70%)
+ 200-1000     gauss 36 (100%)  96 (78%) 144 (12%)
+ 200-1000 diffusion 24 (100%) 64 (100%)  96 (95%)
+1000-5000     gauss  72 (98%) 192 (82%) 288 (28%)
+1000-5000 diffusion 64 (100%) 128 (92%) 256 (78%)
+   >=5000     gauss 144 (98%) 384 (57%)  384 (5%)
+   >=5000 diffusion 192 (98%) 384 (75%) 512 (40%)
+
+=== Erreur médiane par nombre de sources K (tous les bras, y compris l'ablation) ===
+arm           diffusion  gauss
+bin       K                   
+1000-5000 3       0.442  0.433
+          6       0.319  0.343
+          12      0.241  0.274
+          24      0.177  0.217
+          48      0.119  0.171
+200-1000  3       0.285  0.341
+          6       0.223  0.281
+          12      0.143  0.224
+          24      0.098  0.171
+50-200    3       0.217  0.318
+          6       0.136  0.256
+>=5000    3       0.639  0.580
+          6       0.455  0.447
+          12      0.342  0.357
+          24      0.248  0.276
+          48      0.187  0.213
+=== 5_redemarrage — fin 17:46 ===
+
+=== 6_gmm48 — début 17:46 ===
+device : cuda
+train 8986 cellules, test 2888 cellules (jours > 7)
+    gmm d=48 ep 1/25 train mse 0.8897 (7s)
+    gmm d=48 ep 6/25 train mse 0.6224 (14s)
+    gmm d=48 ep 11/25 train mse 0.6224 (20s)
+    gmm d=48 ep 16/25 train mse 0.6224 (27s)
+    gmm d=48 ep 21/25 train mse 0.6224 (34s)
+    gmm d=48 ep 25/25 train mse 0.6224 (39s)
+gmm        d= 48  nrmse 1.000  mass_err 1.000  IoU 0.000  peak_err 1.000  (43s)
+=== 6_gmm48 — fin 17:47 ===
+
+=== 7_ae48 — début 17:47 ===
+device : cuda
+train 8986 cellules, test 2888 cellules (jours > 7)
+    ae d=48 ep 1/60 train mse 0.2050 (2s)
+    ae d=48 ep 6/60 train mse 0.0464 (7s)
+    ae d=48 ep 11/60 train mse 0.0334 (13s)
+    ae d=48 ep 16/60 train mse 0.0270 (18s)
+    ae d=48 ep 21/60 train mse 0.0232 (23s)
+    ae d=48 ep 26/60 train mse 0.0209 (28s)
+    ae d=48 ep 31/60 train mse 0.0187 (33s)
+    ae d=48 ep 36/60 train mse 0.0173 (39s)
+    ae d=48 ep 41/60 train mse 0.0161 (44s)
+    ae d=48 ep 46/60 train mse 0.0153 (49s)
+    ae d=48 ep 51/60 train mse 0.0147 (54s)
+    ae d=48 ep 56/60 train mse 0.0145 (60s)
+    ae d=48 ep 60/60 train mse 0.0144 (64s)
+ae         d= 48  nrmse 0.191  mass_err 0.034  IoU 0.844  peak_err 0.076  (68s)
+=== 7_ae48 — fin 17:48 ===
+
+================ Bilan (17:48) ================
+OK     1_principal
+OK     2_stabilite
+OK     3_ablation
+OK     4_saison2017
+OK     5_redemarrage
+OK     6_gmm48
+OK     7_ae48
+Résultats : outputs_varsrc_jetson/ (main, stability, ablation, season2017, restart_seed1) et outputs_bench/results_jetson.json

@@ -1,0 +1,7 @@
+160 cellules : {'50-200': 40, '200-1000': 40, '1000-5000': 40, '>=5000': 40}
+table des profils de diffusion (24, 16, 128) (0s)
+  50-200     gauss     terminé (10s)
+  50-200     diffusion terminé (16s)
+  200-1000   gauss     terminé (44s)
+  200-1000   diffusion terminé (94s)
+  1000-5000  gauss     terminé (220s)
