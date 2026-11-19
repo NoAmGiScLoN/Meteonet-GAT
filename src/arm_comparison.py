@@ -61,29 +61,37 @@ def paired_delta(df: pd.DataFrame, arm_a: str, arm_b: str) -> pd.DataFrame:
 
 
 EQUIV_COLUMNS = ("paired_delta", "delta")
+EQUIV_SIDES = ("one", "two")
 
 
 def equivalence_table(delta: pd.DataFrame, tol: float, min_k: int,
-                      column: str = "paired_delta") -> pd.DataFrame:
-    """Per bin: max |column| over K >= min_k (up to the bin cap, i.e. its largest K) and verdict.
+                      column: str = "paired_delta", sided: str = "one") -> pd.DataFrame:
+    """Per bin, over K >= min_k (up to the bin cap, i.e. its largest K): worst difference and verdict.
 
-    Default column = paired_delta, the median over cells of (arm_a - arm_b) on the same cell (decision of
-    checkpoint 1d): it removes cell-to-cell variation, whereas the difference of medians ("delta") moves by up
-    to ~0.009 between two runs of the same arm (GPU vs CPU summation order), above the 0.005 tolerance.
+    Default column = paired_delta, the median over cells of (arm_a - arm_b) on the same cell (checkpoint 1d):
+    it removes cell-to-cell variation, whereas the difference of medians ("delta") moves by up to ~0.009
+    between two runs of the same arm (GPU vs CPU summation order), above the 0.005 tolerance.
+    Default sided = "one" (non-inferiority): arm_a passes when it is never worse than arm_b by more than tol
+    (max difference <= tol); being better never fails. "two" requires |difference| <= tol.
 
     A bin without any K >= min_k gets NaN and passes=False.
     """
     if column not in EQUIV_COLUMNS:
         raise ValueError(f"unknown equivalence column {column!r}; expected one of {EQUIV_COLUMNS}")
+    if sided not in EQUIV_SIDES:
+        raise ValueError(f"unknown sided {sided!r}; expected one of {EQUIV_SIDES}")
     rows = []
     for name, g in delta.groupby("bin", sort=False):
         k_cap = int(g.K.max())
-        big = g[g.K >= min_k]
-        max_abs = float(big[column].abs().max()) if len(big) else float("nan")
-        at_cap = float(g[g.K == k_cap][column].iloc[0])
-        rows.append(dict(bin=name, k_cap=k_cap, max_abs_delta=max_abs, delta_at_cap=at_cap,
-                         passes=bool(len(big) and max_abs <= tol), criterion=column))
-    return pd.DataFrame(rows, columns=["bin", "k_cap", "max_abs_delta", "delta_at_cap", "passes", "criterion"])
+        big = g[g.K >= min_k][column]
+        max_abs = float(big.abs().max()) if len(big) else float("nan")
+        max_signed = float(big.max()) if len(big) else float("nan")
+        worst = max_signed if sided == "one" else max_abs
+        rows.append(dict(bin=name, k_cap=k_cap, max_delta=max_signed, max_abs_delta=max_abs,
+                         delta_at_cap=float(g[g.K == k_cap][column].iloc[0]),
+                         passes=bool(len(big) and worst <= tol), criterion=column, sided=sided))
+    return pd.DataFrame(rows, columns=["bin", "k_cap", "max_delta", "max_abs_delta", "delta_at_cap",
+                                       "passes", "criterion", "sided"])
 
 
 def stack_active_params(params: dict[int, np.ndarray], min_cols: int) -> np.ndarray:

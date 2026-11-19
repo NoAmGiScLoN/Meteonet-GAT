@@ -103,6 +103,29 @@ def test_equivalence_can_use_difference_of_medians():
 
 
 @pytest.mark.unit
+def test_equivalence_one_sided_passes_when_first_arm_is_better():
+    # Arrange : bras a (diff7) meilleur de 0.02 que le bras b
+    d = delta_table([("x", 6, -0.02), ("x", 8, 0.003)])
+    # Act
+    out = ac.equivalence_table(d, 0.005, 6).iloc[0]
+    # Assert
+    assert bool(out.passes) and out.sided == "one"
+    assert out.max_delta == pytest.approx(0.003) and out.max_abs_delta == pytest.approx(0.02)
+
+
+@pytest.mark.unit
+def test_equivalence_two_sided_fails_when_first_arm_is_much_better():
+    d = delta_table([("x", 6, -0.02)])
+    assert not ac.equivalence_table(d, 0.005, 6, sided="two").iloc[0].passes
+
+
+@pytest.mark.unit
+def test_equivalence_unknown_sided_raises():
+    with pytest.raises(ValueError, match="both"):
+        ac.equivalence_table(delta_table([("x", 6, 0.0)]), 0.005, 6, sided="both")
+
+
+@pytest.mark.unit
 def test_equivalence_unknown_column_raises():
     with pytest.raises(ValueError, match="nope"):
         ac.equivalence_table(delta_table([("x", 6, 0.0)]), 0.005, 6, column="nope")
