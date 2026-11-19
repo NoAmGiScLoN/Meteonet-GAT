@@ -5,7 +5,8 @@
 #   3. Ablation : seul tau libre (diff_tau) / seul w libre (diff_w), mêmes 160 cellules
 #   4. Autre saison / autre année : avril + septembre 2017 (160 cellules)
 #   5. Redémarrages : initialisation perturbée (seed 1), mêmes 160 cellules
-#   6. Benchmark à vecteur fixe : gmm d=48 (avait échoué) et ae d=48 (sous-entraîné)
+#   7. Benchmark à vecteur fixe : ae d=48 (sous-entraîné auparavant)
+#   (l'étape 6, gmm d=48, a été retirée avec le bras gmm : effondré à deux taux d'apprentissage)
 # Une étape qui échoue n'arrête pas les suivantes ; le bilan s'affiche à la fin.
 # Usage (depuis la racine du dépôt) :
 #   nohup bash scripts/run_jetson.sh > results/04_jetson_run/logs/run_jetson.log 2>&1 &   (variables : PY=python3  DEV=cuda)
@@ -51,8 +52,6 @@ run 4_saison2017  "$PY" src/variable_source_fit.py --sample "$SRC/sample_40_2017
                   --iters 200 --device "$DEV" --out "$OUT/season2017"
 run 5_redemarrage "$PY" src/variable_source_fit.py --sample "$SRC/sample_40.pkl" --arms gauss diffusion --seed 1 \
                   --iters 200 --device "$DEV" --out "$OUT/restart_seed1"
-run 6_gmm48       "$PY" src/compression_benchmark.py --arms gmm --dims 48 --epochs 25 --lr 5e-4 --device "$DEV" \
-                  --tag results_jetson
 run 7_ae48        "$PY" src/compression_benchmark.py --arms ae --dims 48 --epochs 60 --device "$DEV" --tag results_jetson
 
 echo; echo "================ Bilan ($(date +%H:%M)) ================"

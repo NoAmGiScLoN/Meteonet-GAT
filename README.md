@@ -718,7 +718,7 @@ python scripts/build_samples.py        # needs MeteoNet in DATA/NW_rainfall_<yea
 python src/cell_delimitation.py --start "2016-01-01 12:00" --n-frames 3
 python src/track_cells.py --start "2016-01-01 12:00" --n-frames 6
 
-python src/compression_benchmark.py --arms mean pca zernike ae gmm diffusion --dims 6 12 18 30 48   # ≈ 1.5 h CPU
+python src/compression_benchmark.py --arms mean pca zernike ae diffusion --dims 6 12 18 30 48   # ≈ 1.5 h CPU (gmm arm removed, see D12)
 
 bash scripts/run_jetson.sh             # Experiment 2, ≈ 7.5 h on a Jetson Orin Nano (PY, DEV overridable)
 
