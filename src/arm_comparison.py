@@ -60,24 +60,30 @@ def paired_delta(df: pd.DataFrame, arm_a: str, arm_b: str) -> pd.DataFrame:
     return grouped[DELTA_COLS]
 
 
-def equivalence_table(delta: pd.DataFrame, tol: float, min_k: int) -> pd.DataFrame:
-    """Per bin: max |delta| over K >= min_k (up to the bin cap, i.e. its largest K) and verdict.
+EQUIV_COLUMNS = ("paired_delta", "delta")
 
-    delta is the difference of the per-arm medians (med_a - med_b): it is the quantity of interest (does the
-    typical fit quality of one arm match the other?) and stays well defined when the two arms were fitted on
-    different cell sets. paired_delta (median of per-cell differences) is reported alongside in the delta table.
+
+def equivalence_table(delta: pd.DataFrame, tol: float, min_k: int,
+                      column: str = "paired_delta") -> pd.DataFrame:
+    """Per bin: max |column| over K >= min_k (up to the bin cap, i.e. its largest K) and verdict.
+
+    Default column = paired_delta, the median over cells of (arm_a - arm_b) on the same cell (decision of
+    checkpoint 1d): it removes cell-to-cell variation, whereas the difference of medians ("delta") moves by up
+    to ~0.009 between two runs of the same arm (GPU vs CPU summation order), above the 0.005 tolerance.
 
     A bin without any K >= min_k gets NaN and passes=False.
     """
+    if column not in EQUIV_COLUMNS:
+        raise ValueError(f"unknown equivalence column {column!r}; expected one of {EQUIV_COLUMNS}")
     rows = []
     for name, g in delta.groupby("bin", sort=False):
         k_cap = int(g.K.max())
         big = g[g.K >= min_k]
-        max_abs = float(big.delta.abs().max()) if len(big) else float("nan")
-        at_cap = float(g[g.K == k_cap].delta.iloc[0])
+        max_abs = float(big[column].abs().max()) if len(big) else float("nan")
+        at_cap = float(g[g.K == k_cap][column].iloc[0])
         rows.append(dict(bin=name, k_cap=k_cap, max_abs_delta=max_abs, delta_at_cap=at_cap,
-                         passes=bool(len(big) and max_abs <= tol)))
-    return pd.DataFrame(rows, columns=["bin", "k_cap", "max_abs_delta", "delta_at_cap", "passes"])
+                         passes=bool(len(big) and max_abs <= tol), criterion=column))
+    return pd.DataFrame(rows, columns=["bin", "k_cap", "max_abs_delta", "delta_at_cap", "passes", "criterion"])
 
 
 def stack_active_params(params: dict[int, np.ndarray], min_cols: int) -> np.ndarray:

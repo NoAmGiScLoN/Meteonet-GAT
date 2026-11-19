@@ -78,7 +78,34 @@ def test_paired_delta_unknown_arm_raises(two_arm_df):
 
 # ------------------------------------------------------------------ equivalence_table
 def delta_table(rows):
-    return pd.DataFrame(rows, columns=["bin", "K", "delta"]).assign(med_a=0, med_b=0, paired_delta=0, n=1)
+    """Valeurs données dans la colonne testée par défaut (paired_delta) ; delta reste nul."""
+    return pd.DataFrame(rows, columns=["bin", "K", "paired_delta"]).assign(med_a=0, med_b=0, delta=0, n=1)
+
+
+@pytest.mark.unit
+def test_equivalence_uses_paired_delta_by_default():
+    # Arrange : différence de médianes hors tolérance, différence appariée dans la tolérance
+    d = delta_table([("x", 6, 0.002)]).assign(delta=0.02)
+    # Act
+    out = ac.equivalence_table(d, 0.005, 6).iloc[0]
+    # Assert
+    assert bool(out.passes) and out.criterion == "paired_delta"
+
+
+@pytest.mark.unit
+def test_equivalence_can_use_difference_of_medians():
+    # Arrange
+    d = delta_table([("x", 6, 0.002)]).assign(delta=0.02)
+    # Act
+    out = ac.equivalence_table(d, 0.005, 6, column="delta").iloc[0]
+    # Assert
+    assert not out.passes and out.max_abs_delta == pytest.approx(0.02)
+
+
+@pytest.mark.unit
+def test_equivalence_unknown_column_raises():
+    with pytest.raises(ValueError, match="nope"):
+        ac.equivalence_table(delta_table([("x", 6, 0.0)]), 0.005, 6, column="nope")
 
 
 @pytest.mark.unit

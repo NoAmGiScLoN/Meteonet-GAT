@@ -21,6 +21,7 @@ tools/samples/*.xlsx
 
 # Python / OS / editor
 __pycache__/
+.coverage
 *.pyc
 .ipynb_checkpoints/
 .DS_Store
