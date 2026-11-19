@@ -183,7 +183,7 @@ The planned model sets the requirements:
 
 ## 3. Cell delimitation
 
-Code: `src/cell_delimitation.py` — results: `results/01_segmentation_tracking/`
+Code: `src/cell_delimitation.py` — results: `archive/E0_segmentation_tracking/results/` ([E0 report](archive/E0_segmentation_tracking/report.md))
 
 A cell is a **connected component of rainy pixels**. We use 8-connectivity, so diagonally oriented rain
 bands are not fragmented by the grid. The key decision is which pixels count as rainy.
@@ -238,7 +238,7 @@ Cells move little and coherently between consecutive maps (contours at 12:00 red
 
 ## 4. Tracking
 
-Code: `src/track_cells.py` — results: `results/01_segmentation_tracking/T1_*`
+Code: `src/track_cells.py` — results: `archive/E0_segmentation_tracking/results/T1_*`
 
 Segmentation labels each map independently. Tracking assigns a persistent `track_id`. Each track is one
 **input sequence for the LSTM** (§1.2), and tracking is also needed for the stability test (§7.6).
@@ -296,7 +296,7 @@ Each representation is decoded back into a rain field and compared with the rada
 
 ## 6. Experiment 1 — fixed-length vectors
 
-Code: `src/cell_dataset.py`, `src/compression_benchmark.py` — results: `results/02_fixed_vector_benchmark/`
+Code: `src/cell_dataset.py`, `src/compression_benchmark.py` — results: `archive/E1_fixed_vectors/results/` ([E1 report](archive/E1_fixed_vectors/report.md)); input `results/02_fixed_vector_benchmark/cells.npz`
 
 ### 6.1 Why diffusion
 
@@ -372,7 +372,7 @@ the cell.
 ## 7. Experiment 2 — variable-size source sets
 
 Code: `src/variable_source_fit.py`, `src/stability_test.py`, `scripts/run_jetson.sh` — results:
-`results/03_variable_sources/` (preliminary), `results/04_jetson_run/` (full study)
+`archive/E2_variable_sources/01_cpu_prelim/results/` (preliminary, [report](archive/E2_variable_sources/01_cpu_prelim/report.md)), `archive/E2_variable_sources/02_jetson_baseline/results/` (full study, [report](archive/E2_variable_sources/02_jetson_baseline/report.md))
 
 ### 7.1 Representation
 
@@ -601,25 +601,25 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
 
 ## 9. Decision log
 
-| # | Decision | Reason | § |
-|---|---|---|---|
-| D0 | Core objective: forecast each cell's position, shape and intensity from its own history and the influence of surrounding cells | The dynamics of rain are driven by cell lifecycles and interactions | 1.1 |
-| D1 | Missing data (`-1`) is never treated as dry | Avoids false dry areas and false cell edges | 2 |
-| D2 | Rainy pixel = rate ≥ 1 mm/h, 8-connectivity | Lighter rain is uneventful and merges distinct systems | 3.2 |
-| D3 | Large cells kept whole | They are real objects; size is handled by a larger description | 3.3 |
-| D4 | Cells < 50 px ignored | Shape dominated by pixelation; short-lived | 3.3 |
-| D5 | Representation = compression, not prediction | Forecasting belongs to the GAT + LSTM; no information should be lost here | 1.3 |
-| D6 | Evaluate by reconstruction | Direct check that place, shape and intensity are retained | 1.3 |
-| D7 | Errors on √rate, reported by size bin, split by day, equal budget | Fair, leak-free comparison not dominated by peaks or small cells | 5 |
-| D8 | Drop the fixed-length vectors | Resizing destroys large-cell detail and drops position and size | 6.5 |
-| D9 | Node = variable-size source set at native resolution | Description scales with the cell; interpretable | 7.1 |
-| D10 | Per-source diffusion profile instead of Gaussian | Lower error and much better footprint at equal budget | 7.5 |
-| D11 | Drop `τ`, keep `w` (7 parameters per source) | `τ` is redundant; `w` carries the gain | 7.5 |
-| D12 | Drop the Gaussian fixed-vector decoder | Collapsed at two learning rates | 6.4 |
-| D13 | Run heavy experiments on a Jetson Orin Nano | The development machine has no usable GPU | 7.4 |
-| D14 | *(planned)* Graph edges = influence between cells **within a frame**, with relative-geometry edge features | Interaction is spatial; time is handled by the LSTM; plain GAT attention ignores geometry | 1.2 |
-| D15 | *(planned)* Temporal dynamics learned by an LSTM along each track | Each cell's evolution is a sequence; a standard, well-tested design for interacting agents (Social-LSTM, STGAT) | 1.2 |
-| D16 | *(planned)* Train with a field-space loss through the differentiable renderer | Source sets are non-identifiable, so source-by-source losses are ill-posed | 1.2, 7.6 |
+| # | Decision | Reason | § | Evidence |
+|---|---|---|---|---|
+| D0 | Core objective: forecast each cell's position, shape and intensity from its own history and the influence of surrounding cells | The dynamics of rain are driven by cell lifecycles and interactions | 1.1 | [§1.1](#11-core-objective) |
+| D1 | Missing data (`-1`) is never treated as dry | Avoids false dry areas and false cell edges | 2 | [E0 report](archive/E0_segmentation_tracking/report.md) |
+| D2 | Rainy pixel = rate ≥ 1 mm/h, 8-connectivity | Lighter rain is uneventful and merges distinct systems | 3.2 | [E0 report](archive/E0_segmentation_tracking/report.md) |
+| D3 | Large cells kept whole | They are real objects; size is handled by a larger description | 3.3 | [E0 report](archive/E0_segmentation_tracking/report.md) |
+| D4 | Cells < 50 px ignored | Shape dominated by pixelation; short-lived | 3.3 | [E0 report](archive/E0_segmentation_tracking/report.md) |
+| D5 | Representation = compression, not prediction | Forecasting belongs to the GAT + LSTM; no information should be lost here | 1.3 | [E1 report](archive/E1_fixed_vectors/report.md) |
+| D6 | Evaluate by reconstruction | Direct check that place, shape and intensity are retained | 1.3 | [E1 report](archive/E1_fixed_vectors/report.md) |
+| D7 | Errors on √rate, reported by size bin, split by day, equal budget | Fair, leak-free comparison not dominated by peaks or small cells | 5 | [E1 report](archive/E1_fixed_vectors/report.md) |
+| D8 | Drop the fixed-length vectors | Resizing destroys large-cell detail and drops position and size | 6.5 | [E1 report](archive/E1_fixed_vectors/report.md) |
+| D9 | Node = variable-size source set at native resolution | Description scales with the cell; interpretable | 7.1 | [E2 CPU report](archive/E2_variable_sources/01_cpu_prelim/report.md) |
+| D10 | Per-source diffusion profile instead of Gaussian | Lower error and much better footprint at equal budget | 7.5 | [E2 Jetson report](archive/E2_variable_sources/02_jetson_baseline/report.md) |
+| D11 | Drop `τ`, keep `w` (7 parameters per source) | `τ` is redundant; `w` carries the gain | 7.5 | [E2 Jetson report](archive/E2_variable_sources/02_jetson_baseline/report.md) |
+| D12 | Drop the Gaussian fixed-vector decoder | Collapsed at two learning rates | 6.4 | [E1 report](archive/E1_fixed_vectors/report.md) |
+| D13 | Run heavy experiments on a Jetson Orin Nano | The development machine has no usable GPU | 7.4 | [E2 CPU report](archive/E2_variable_sources/01_cpu_prelim/report.md) |
+| D14 | *(planned)* Graph edges = influence between cells **within a frame**, with relative-geometry edge features | Interaction is spatial; time is handled by the LSTM; plain GAT attention ignores geometry | 1.2 | [§1.2](#12-planned-forecasting-model-gat-within-frames-lstm-along-tracks) |
+| D15 | *(planned)* Temporal dynamics learned by an LSTM along each track | Each cell's evolution is a sequence; a standard, well-tested design for interacting agents (Social-LSTM, STGAT) | 1.2 | [§1.2](#12-planned-forecasting-model-gat-within-frames-lstm-along-tracks) |
+| D16 | *(planned)* Train with a field-space loss through the differentiable renderer | Source sets are non-identifiable, so source-by-source losses are ill-posed | 1.2, 7.6 | [§1.2](#12-planned-forecasting-model-gat-within-frames-lstm-along-tracks); [stability, E2 Jetson report](archive/E2_variable_sources/02_jetson_baseline/report.md) |
 
 **Node layout under consideration** (panel ④ of the pipeline figure in §1.2):
 
@@ -678,6 +678,8 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
 .
 ├── README.md
 ├── requirements.txt
+├── requirements-dev.txt           # test tools (pytest, pytest-cov)
+├── pyproject.toml                 # pytest configuration
 ├── DATA/                          # MeteoNet raw data (not versioned, 5.6 GB)
 ├── src/
 │   ├── cell_delimitation.py       # loading, 1 mm/h segmentation, per-cell features   → results/01
@@ -691,17 +693,25 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
 │   ├── run_jetson.sh              # the 7-step GPU session (Section 7.4)
 │   ├── make_figures.py            # result figures of this report → docs/figures/
 │   └── pipeline_figure.py         # pipeline overview figure (§1.2) → docs/figures/00_pipeline.png
+├── tests/                         # pytest: archive layout, figure inputs (unit and integration markers)
 ├── tools/                         # data inspection helpers
 ├── docs/
 │   └── figures/                   # all figures of this report (generated)
-└── results/
-    ├── 01_segmentation_tracking/
-    ├── 02_fixed_vector_benchmark/ # results.json, results_jetson.json, benchmark.log
-    ├── 03_variable_sources/       # preliminary CPU run
-    └── 04_jetson_run/             # main/ ablation/ season2017/ restart_seed1/ stability/ logs/
+├── archive/                       # finished experiments: outputs, reports, code pinned by tag v0-jetson-baseline
+│   ├── README.md                  # index: experiment → question → decisions → report
+│   ├── E0_segmentation_tracking/  # results/, report.md
+│   ├── E1_fixed_vectors/          # results/, report.md
+│   └── E2_variable_sources/
+│       ├── 01_cpu_prelim/         # results/, report.md (CPU preliminary run)
+│       └── 02_jetson_baseline/    # results/, report.md (full Jetson programme)
+└── results/                       # git-ignored: rebuildable inputs + new runs (see results/README.md)
+    ├── 01_segmentation_tracking/  # new runs (archived outputs: archive/E0_segmentation_tracking/)
+    ├── 02_fixed_vector_benchmark/ # input cells.npz; new runs
+    ├── 03_variable_sources/       # inputs (sample_*.pkl, stability_pairs_25.pkl, diffusion_profiles.pt); new runs
+    └── 04_jetson_run/             # new runs: main/ ablation/ season2017/ restart_seed1/ stability/ logs/
 ```
 
-**Contents of each run folder in `results/04_jetson_run/`:**
+**Contents of each run folder in `archive/E2_variable_sources/02_jetson_baseline/results/`:**
 
 - `fits_<bin>.csv`: one row per cell × source type × K, with nrmse, IoU, mass and peak errors;
 - two summary tables;
