@@ -350,3 +350,87 @@ def test_main_archived_writes_reproduction_on_diffusion_arm(tmp_path, monkeypatc
     rep = pd.read_csv(out / "reproduction.csv").set_index("K")
     assert set(rep.arm) == {"diffusion"} and set(rep.run) == {"run"}
     assert bool(rep.loc[6, "passes"]) and not bool(rep.loc[8, "passes"])
+
+
+# ------------------------------------------------------------------ --reference
+def write_arm(run, df, arm):
+    run.mkdir(exist_ok=True)
+    df[df.arm == arm].to_csv(run / "fits_50_200.csv", index=False)
+
+
+@pytest.fixture
+def run_and_reference(tmp_path, two_arm_df):
+    """run: diff7 only; reference: diffusion only (same cells)."""
+    run, ref, out = tmp_path / "run", tmp_path / "ref", tmp_path / "out"
+    out.mkdir()
+    write_arm(run, two_arm_df, "diff7")
+    write_arm(ref, two_arm_df, "diffusion")
+    return run, ref, out
+
+
+@pytest.mark.integration
+def test_compare_run_fills_missing_arm_from_reference(run_and_reference):
+    run, ref, out = run_and_reference
+    ac.compare_run(run, out, reference=ref)
+    delta = pd.read_csv(out / "run_paired_delta.csv")
+    assert delta[delta.K == 6].paired_delta.iloc[0] == pytest.approx(-0.02)
+    assert (out / "run_equivalence.csv").exists()
+
+
+@pytest.mark.integration
+def test_compare_run_without_reference_still_skips_missing_arm(run_and_reference, caplog):
+    run, _, out = run_and_reference
+    with caplog.at_level("WARNING"):
+        ac.compare_run(run, out)
+    assert "diffusion" in caplog.text and not (out / "run_paired_delta.csv").exists()
+
+
+@pytest.mark.integration
+def test_reference_without_params_writes_comparison_and_logs_note(run_and_reference, caplog):
+    import pickle
+    run, ref, out = run_and_reference
+    rng = np.random.default_rng(0)
+    (run / "params_50_200_diff7.pkl").write_bytes(pickle.dumps({0: rng.normal(size=(10, 8))}))
+    import profile_lut as pl
+    pl.build_logw_lut(pl.LogWLutSpec(n_w=3, n=32, steps=20, n_r=16), run)
+    with caplog.at_level("INFO"):
+        ac.compare_run(run, out, reference=ref)
+    assert (out / "run_equivalence.csv").exists()
+    assert "no params" in caplog.text and "diffusion" in caplog.text
+    assert set(pd.read_csv(out / "run_w_pileup.csv").arm) == {"diff7"}
+
+
+@pytest.mark.integration
+def test_reference_params_are_used_for_pileup(run_and_reference):
+    import pickle
+    run, ref, out = run_and_reference
+    (ref / "params_50_200_diffusion.pkl").write_bytes(pickle.dumps({0: np.zeros((4, 8))}))
+    ac.compare_run(run, out, reference=ref)
+    assert set(pd.read_csv(out / "run_w_pileup.csv").arm) == {"diffusion"}
+
+
+@pytest.mark.integration
+def test_reference_mismatched_ids_use_intersection_and_warn(run_and_reference, caplog):
+    run, ref, out = run_and_reference
+    ref_df = pd.read_csv(ref / "fits_50_200.csv")
+    ref_df[ref_df.cell != 0].assign(cell=lambda d: d.cell).to_csv(ref / "fits_50_200.csv", index=False)
+    with caplog.at_level("WARNING"):
+        ac.compare_run(run, out, reference=ref)
+    assert "intersection" in caplog.text
+    assert set(pd.read_csv(out / "run_paired_delta.csv").n) == {2}
+
+
+@pytest.mark.integration
+def test_reference_empty_intersection_raises(run_and_reference):
+    run, ref, out = run_and_reference
+    pd.read_csv(ref / "fits_50_200.csv").assign(cell=lambda d: d.cell + 100).to_csv(ref / "fits_50_200.csv", index=False)
+    with pytest.raises(ValueError, match="intersection"):
+        ac.compare_run(run, out, reference=ref)
+
+
+@pytest.mark.integration
+def test_main_reference_option(run_and_reference, monkeypatch):
+    run, ref, out = run_and_reference
+    monkeypatch.setattr(sys, "argv", ["ac", "--runs", str(run), "--out", str(out), "--reference", str(ref)])
+    ac.main()
+    assert (out / "run_equivalence.csv").exists()

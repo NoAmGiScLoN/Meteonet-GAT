@@ -4,6 +4,10 @@ Usage: python src/arm_comparison.py --runs DIR [DIR ...] --out DIR [--logw-key K
 Writes, per run: <run>_paired_delta.csv, <run>_equivalence.csv and, when params files exist,
 <run>_w_pileup.csv and <run>_w_hist.png.  A run missing the diff7 or diffusion arm is skipped with a warning.
 --logw-key picks the diffusion_profiles_logw_<key>.pt table when a run directory holds several.
+--reference DIR fills, for every run, the compared arm(s) missing from its fits with the rows of DIR's fits_*.csv
+(and DIR's params_<bin>_<arm>.pkl when present; otherwise the w diagnostics skip that arm).  Cell ids are assumed
+identical (same sample, no --max-per-bin): on a partial match only the (bin, cell) intersection is compared, with a
+warning; an empty intersection is an error.
 --archived DIR compares the diffusion arm of each run with the archived fits in DIR (e.g.
 archive/E2_variable_sources/02_jetson_baseline/results/main) and writes reproduction.csv (all runs, "run" column).
 The comparison is on per-(bin, K) medians of nrmse: with --max-per-bin the cell ids differ from the archive,
@@ -33,6 +37,7 @@ PILEUP_FRAC = 0.10  # more than this fraction of saturated sources flags a pile-
 MIN_K_COMPARE = 6  # smaller K are dominated by the initialisation, not compared
 W_COL = 7  # raw w column in the 8-column parameter layout
 N_BINS_HIST = 30
+COMPARED_ARMS = ("diff7", "diffusion")
 KEYS = ["bin", "arm", "K"]
 DELTA_COLS = ["bin", "K", "med_a", "med_b", "delta", "paired_delta", "n"]
 
@@ -178,18 +183,56 @@ def has_arms(df: pd.DataFrame, run_dir: Path, arms: tuple[str, ...]) -> bool:
     return not missing
 
 
-def compare_run(run_dir: Path, out: Path, logw_key: str | None = None) -> None:
+def fill_from_reference(df: pd.DataFrame, reference: Path, arms: tuple[str, ...]) -> tuple[pd.DataFrame, list[str]]:
+    """Append the rows of the arms missing from `df` taken from the reference fits; returns (fits, filled arms)."""
+    ref = load_fits(reference)
+    filled = [a for a in arms if a not in set(df.arm) and a in set(ref.arm)]
+    if not filled:
+        return df, []
+    return pd.concat([df, ref[ref.arm.isin(filled)]], ignore_index=True), filled
+
+
+def restrict_to_common_cells(df: pd.DataFrame, arms: tuple[str, ...]) -> pd.DataFrame:
+    """Keep the (bin, cell) pairs fitted by every arm; warns on a partial match, raises on an empty one."""
+    cells = [set(zip(df[df.arm == a].bin, df[df.arm == a].cell)) for a in arms]
+    common = set.intersection(*cells)
+    if not common:
+        raise ValueError(f"empty (bin, cell) intersection between arms {list(arms)} (reference from another sample?)")
+    if any(len(c) != len(common) for c in cells):
+        logger.warning("cell ids differ between arms %s: comparing on the intersection of %d (bin, cell) pairs",
+                       list(arms), len(common))
+        keep = [(b, c) in common for b, c in zip(df.bin, df.cell)]
+        return df[keep]
+    return df
+
+
+def arm_params(run_dir: Path, arm: str, reference: Path | None, filled: list[str]) -> dict[int, np.ndarray]:
+    """Parameters of an arm: from the reference when its fits were taken from there (note logged if absent)."""
+    source = reference if arm in filled and reference is not None else run_dir
+    params = load_run_params(source, arm)
+    if not params and arm in filled:
+        logger.info("%s: no params_*_%s.pkl in reference %s, w diagnostics skipped for this arm",
+                    Path(run_dir).name, arm, source)
+    return params
+
+
+def compare_run(run_dir: Path, out: Path, logw_key: str | None = None, reference: Path | None = None) -> None:
     """Write the comparison tables (and w diagnostics when params exist) of one run."""
     name = Path(run_dir).name
     df = load_fits(run_dir)
-    if not has_arms(df, run_dir, ("diff7", "diffusion")):
+    filled: list[str] = []
+    if reference is not None:
+        df, filled = fill_from_reference(df, Path(reference), COMPARED_ARMS)
+    if not has_arms(df, run_dir, COMPARED_ARMS):
         return
+    if filled:
+        df = restrict_to_common_cells(df, COMPARED_ARMS)
     delta = paired_delta(df, "diff7", "diffusion")
     equiv = equivalence_table(delta, EQUIV_TOL, MIN_K_COMPARE)
     delta.to_csv(out / f"{name}_paired_delta.csv", index=False)
     equiv.to_csv(out / f"{name}_equivalence.csv", index=False)
     logger.info("%s\n%s", name, equiv.to_string(index=False))
-    params = {arm: p for arm in ("diffusion", "diff7") if (p := load_run_params(run_dir, arm))}
+    params = {arm: p for arm in ("diffusion", "diff7") if (p := arm_params(run_dir, arm, reference, filled))}
     if not params:
         return
     pile = pd.DataFrame([dict(arm=a, **w_pileup(p, PILEUP_EDGE)) for a, p in params.items()])
@@ -219,13 +262,14 @@ def main() -> None:
     ap.add_argument("--runs", nargs="+", required=True, help="run directories (fits_*.csv, params_*.pkl)")
     ap.add_argument("--out", required=True, help="output directory")
     ap.add_argument("--logw-key", default=None, help="key of the log-w table when a run holds several")
+    ap.add_argument("--reference", default=None, help="directory supplying the compared arm(s) missing from each run")
     ap.add_argument("--archived", default=None, help="archived fits directory: writes reproduction.csv")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     for run in args.runs:
-        compare_run(Path(run), out, args.logw_key)
+        compare_run(Path(run), out, args.logw_key, Path(args.reference) if args.reference else None)
     if args.archived:
         reproduction_table([Path(r) for r in args.runs], Path(args.archived)).to_csv(out / "reproduction.csv", index=False)
 
