@@ -1,0 +1,297 @@
+nohup: ignoring input
+commit : 1ff7c40 | 2026-11-20 14:10
+python 3.12.3 | torch 2.15.0+cu132 | CUDA : True
+GPU : Orin
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+
+=== 1_main — début 14:10 ===
+device : cuda
+160 cellules : {'50-200': 40, '200-1000': 40, '1000-5000': 40, '>=5000': 40}
+table default (24, 16, 128) (0s)
+log-w table loaded: results/05_diff7_convergence/main/diffusion_profiles_logw_ace17c5890.pt (key ace17c5890)
+table log-w (1, 16, 128) (0s) clé ace17c5890
+  50-200     diffusion terminé (72s)
+  50-200     diff7     terminé (70s)
+  200-1000   diffusion terminé (247s)
+  200-1000   diff7     terminé (247s)
+  1000-5000  diffusion terminé (608s)
+  1000-5000  diff7     terminé (647s)
+  >=5000     diffusion terminé (1724s)
+  >=5000     diff7     terminé (1768s)
+
+=== Erreur médiane (nrmse sur sqrt(taux)) à nombre de paramètres égal ===
+Empty DataFrame
+Columns: []
+Index: []
+
+=== Paramètres nécessaires pour atteindre une erreur cible (médiane sur les cellules ; % atteint) ===
+      bin       arm    <= 0.3    <= 0.2   <= 0.15
+   50-200 diffusion 16 (100%)  32 (95%)  48 (85%)
+   50-200     diff7 14 (100%)  35 (95%)  42 (78%)
+ 200-1000 diffusion 24 (100%) 64 (100%) 96 (100%)
+ 200-1000     diff7 21 (100%) 56 (100%)  84 (92%)
+1000-5000 diffusion 64 (100%) 128 (92%) 256 (80%)
+1000-5000     diff7 56 (100%) 140 (95%) 224 (75%)
+   >=5000 diffusion 128 (98%) 320 (80%) 512 (40%)
+   >=5000     diff7 168 (98%) 280 (70%) 448 (40%)
+
+=== Erreur médiane par nombre de sources K (tous les bras, y compris l'ablation) ===
+arm           diff7  diffusion
+bin       K                   
+1000-5000 3   0.440      0.436
+          6   0.320      0.321
+          12  0.240      0.233
+          24  0.176      0.173
+          48  0.117      0.119
+200-1000  3   0.293      0.292
+          6   0.216      0.213
+          12  0.149      0.142
+          24  0.085      0.082
+50-200    3   0.225      0.218
+          6   0.138      0.137
+>=5000    3   0.647      0.621
+          6   0.462      0.450
+          12  0.364      0.344
+          24  0.258      0.246
+          48  0.189      0.185
+=== 1_main — fin 15:40 ===
+
+=== 1_compare — début 15:40 ===
+main
+      bin  k_cap  max_delta  max_abs_delta  delta_at_cap  passes    criterion sided
+1000-5000     48   0.005053       0.005053      0.003116   False paired_delta   one
+ 200-1000     24   0.005032       0.005032      0.002431   False paired_delta   one
+   50-200      8   0.000711       0.003553     -0.003553    True paired_delta   one
+   >=5000     64   0.020007       0.020007      0.001628   False paired_delta   one
+=== 1_compare — fin 15:40 ===
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+
+=== 2_main_wext — début 15:40 ===
+device : cuda
+160 cellules : {'50-200': 40, '200-1000': 40, '1000-5000': 40, '>=5000': 40}
+log-w table loaded: results/05_diff7_convergence/main_wext/diffusion_profiles_logw_1e980880f3.pt (key 1e980880f3)
+table log-w (1, 24, 128) (0s) clé 1e980880f3
+  50-200     diff7     terminé (89s)
+  200-1000   diff7     terminé (255s)
+  1000-5000  diff7     terminé (659s)
+  >=5000     diff7     terminé (1802s)
+
+=== Erreur médiane (nrmse sur sqrt(taux)) à nombre de paramètres égal ===
+Empty DataFrame
+Columns: []
+Index: []
+
+=== Paramètres nécessaires pour atteindre une erreur cible (médiane sur les cellules ; % atteint) ===
+      bin   arm    <= 0.3    <= 0.2   <= 0.15
+   50-200 diff7 14 (100%)  28 (90%)  42 (75%)
+ 200-1000 diff7 28 (100%) 56 (100%)  84 (85%)
+1000-5000 diff7 56 (100%) 168 (95%) 224 (75%)
+   >=5000 diff7 168 (98%) 280 (75%) 448 (38%)
+
+=== Erreur médiane par nombre de sources K (tous les bras, y compris l'ablation) ===
+arm           diff7
+bin       K        
+1000-5000 3   0.446
+          6   0.318
+          12  0.249
+          24  0.184
+          48  0.120
+200-1000  3   0.301
+          6   0.216
+          12  0.151
+          24  0.090
+50-200    3   0.225
+          6   0.145
+>=5000    3   0.650
+          6   0.460
+          12  0.369
+          24  0.260
+          48  0.187
+=== 2_main_wext — fin 16:27 ===
+
+=== 2_compare — début 16:27 ===
+main_wext
+      bin  k_cap  max_delta  max_abs_delta  delta_at_cap  passes    criterion sided
+1000-5000     48   0.004985       0.004985      0.004985    True paired_delta   one
+ 200-1000     24   0.008221       0.008221      0.008221   False paired_delta   one
+   50-200      8   0.006198       0.006198     -0.001618   False paired_delta   one
+   >=5000     64   0.020565       0.020565      0.002078   False paired_delta   one
+=== 2_compare — fin 16:27 ===
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+
+=== 3_convergence — début 16:27 ===
+log-w table loaded: results/05_diff7_convergence/convergence/diffusion_profiles_logw_ace17c5890.pt (key ace17c5890)
+40 cellules, bras diff7, niveaux [200, 500, 2000], clé de table ace17c5890
+  groupe de 10 cellules, 200 itérations : 79.4 s
+  groupe de 10 cellules, 500 itérations : 200.6 s
+  groupe de 10 cellules, 2000 itérations : 724.2 s
+classe 50-200 terminée (10 cellules), 1004.2 s écoulées
+  pic mémoire CUDA : 0.00 Go
+  groupe de 10 cellules, 200 itérations : 138.0 s
+  groupe de 10 cellules, 500 itérations : 361.1 s
+  groupe de 10 cellules, 2000 itérations : 1411.3 s
+classe 200-1000 terminée (10 cellules), 2914.6 s écoulées
+  pic mémoire CUDA : 0.01 Go
+  groupe de 10 cellules, 200 itérations : 170.8 s
+  groupe de 10 cellules, 500 itérations : 446.1 s
+  groupe de 10 cellules, 2000 itérations : 1774.6 s
+classe 1000-5000 terminée (10 cellules), 5306.1 s écoulées
+  pic mémoire CUDA : 0.06 Go
+  groupe de 4 cellules, 200 itérations : 167.4 s
+  groupe de 4 cellules, 500 itérations : 490.5 s
+  groupe de 4 cellules, 2000 itérations : 2143.5 s
+  groupe de 4 cellules, 200 itérations : 155.0 s
+  groupe de 4 cellules, 500 itérations : 405.1 s
+  groupe de 4 cellules, 2000 itérations : 1999.2 s
+  groupe de 2 cellules, 200 itérations : 153.3 s
+  groupe de 2 cellules, 500 itérations : 459.2 s
+  groupe de 2 cellules, 2000 itérations : 1908.4 s
+classe >=5000 terminée (10 cellules), 13187.8 s écoulées
+  pic mémoire CUDA : 0.19 Go
+
+      bin  k_cap  chosen_iters  converged  gain_200_500  gain_500_2000  gain_p90_200_500  gain_p90_500_2000
+   50-200      8           200       True      0.003447      -0.000167          0.083587           0.014200
+ 200-1000     24           200       True      0.004989      -0.001558          0.021575           0.006493
+1000-5000     48           500       True      0.007322      -0.000689          0.018537           0.005354
+   >=5000     64           500       True      0.006843       0.002312          0.019309           0.011537
+=== 3_convergence — fin 20:07 ===
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+
+=== 4_season2017 — début 20:07 ===
+device : cuda
+160 cellules : {'50-200': 40, '200-1000': 40, '1000-5000': 40, '>=5000': 40}
+log-w table loaded: results/05_diff7_convergence/season2017_diff7/diffusion_profiles_logw_ace17c5890.pt (key ace17c5890)
+table log-w (1, 16, 128) (0s) clé ace17c5890
+  50-200     diff7     terminé (91s)
+  200-1000   diff7     terminé (263s)
+  1000-5000  diff7     terminé (657s)
+  >=5000     diff7     terminé (1979s)
+
+=== Erreur médiane (nrmse sur sqrt(taux)) à nombre de paramètres égal ===
+Empty DataFrame
+Columns: []
+Index: []
+
+=== Paramètres nécessaires pour atteindre une erreur cible (médiane sur les cellules ; % atteint) ===
+      bin   arm    <= 0.3    <= 0.2   <= 0.15
+   50-200 diff7  21 (98%)  42 (82%)  42 (55%)
+ 200-1000 diff7 42 (100%)  84 (90%) 112 (72%)
+1000-5000 diff7  84 (98%) 168 (75%) 224 (52%)
+   >=5000 diff7 168 (92%) 336 (52%) 336 (10%)
+
+=== Erreur médiane par nombre de sources K (tous les bras, y compris l'ablation) ===
+arm           diff7
+bin       K        
+1000-5000 3   0.524
+          6   0.394
+          12  0.293
+          24  0.216
+          48  0.144
+200-1000  3   0.366
+          6   0.255
+          12  0.187
+          24  0.112
+50-200    3   0.267
+          6   0.176
+>=5000    3   0.601
+          6   0.477
+          12  0.380
+          24  0.294
+          48  0.222
+=== 4_season2017 — fin 20:57 ===
+
+=== 4_compare — début 20:57 ===
+season2017_diff7
+      bin  k_cap  max_delta  max_abs_delta  delta_at_cap  passes    criterion sided
+1000-5000     48   0.005540       0.005540      0.002137   False paired_delta   one
+ 200-1000     24   0.004370       0.004370     -0.000025    True paired_delta   one
+   50-200      8   0.002808       0.002808     -0.000412    True paired_delta   one
+   >=5000     64   0.012741       0.012741      0.002712   False paired_delta   one
+season2017_diff7: no params_*_diffusion.pkl in reference archive/E2_variable_sources/02_jetson_baseline/results/season2017, w diagnostics skipped for this arm
+=== 4_compare — fin 20:57 ===
+--- results/05_diff7_convergence/compare_2017/season2017_diff7_equivalence.csv
+bin,k_cap,max_delta,max_abs_delta,delta_at_cap,passes,criterion,sided
+1000-5000,48,0.005540154874324799,0.005540154874324799,0.002136513590812683,False,paired_delta,one
+200-1000,24,0.004369787871837616,0.004369787871837616,-2.4899840354919434e-05,True,paired_delta,one
+50-200,8,0.002807512879371643,0.002807512879371643,-0.0004119686782360077,True,paired_delta,one
+>=5000,64,0.012740544974803925,0.012740544974803925,0.0027124881744384766,False,paired_delta,one
+--- results/05_diff7_convergence/compare_main/main_equivalence.csv
+bin,k_cap,max_delta,max_abs_delta,delta_at_cap,passes,criterion,sided
+1000-5000,48,0.0050527602434158325,0.0050527602434158325,0.0031156018376350403,False,paired_delta,one
+200-1000,24,0.00503183901309967,0.00503183901309967,0.002430777996778488,False,paired_delta,one
+50-200,8,0.000710710883140564,0.003552839159965515,-0.003552839159965515,True,paired_delta,one
+>=5000,64,0.020007267594337463,0.020007267594337463,0.0016280710697174072,False,paired_delta,one
+--- results/05_diff7_convergence/compare_wext/main_wext_equivalence.csv
+bin,k_cap,max_delta,max_abs_delta,delta_at_cap,passes,criterion,sided
+1000-5000,48,0.00498545914888382,0.00498545914888382,0.00498545914888382,True,paired_delta,one
+200-1000,24,0.008221369236707687,0.008221369236707687,0.008221369236707687,False,paired_delta,one
+50-200,8,0.006198316812515259,0.006198316812515259,-0.0016179177910089493,False,paired_delta,one
+>=5000,64,0.020565181970596313,0.020565181970596313,0.0020782724022865295,False,paired_delta,one
+--- results/05_diff7_convergence/compare_2017/season2017_diff7_w_pileup.csv
+arm,frac_low,frac_high,flag
+diff7,0.22690972222222222,0.042881944444444445,True
+--- results/05_diff7_convergence/compare_main/main_w_pileup.csv
+arm,frac_low,frac_high,flag
+diffusion,0.15572916666666667,0.024131944444444445,True
+diff7,0.23194444444444445,0.043055555555555555,True
+--- results/05_diff7_convergence/compare_wext/main_wext_w_pileup.csv
+arm,frac_low,frac_high,flag
+diffusion,0.15572916666666667,0.024131944444444445,True
+diff7,0.128125,0.044444444444444446,True
+--- results/05_diff7_convergence/compare_main/reproduction.csv
+bin,arm,K,med_new,med_archived,diff,passes,run
+1000-5000,diffusion,1,0.7415854632854462,0.7415854632854462,0.0,True,main
+1000-5000,diffusion,2,0.5142330527305603,0.5142330527305603,0.0,True,main
+1000-5000,diffusion,3,0.4363408535718918,0.4363472908735275,-6.4373016357421875e-06,True,main
+1000-5000,diffusion,4,0.35625165700912476,0.35625165700912476,0.0,True,main
+1000-5000,diffusion,6,0.32088254392147064,0.32088254392147064,0.0,True,main
+1000-5000,diffusion,8,0.28145088255405426,0.28144805133342743,2.8312206268310547e-06,True,main
+1000-5000,diffusion,12,0.23288801312446594,0.2325931414961815,0.00029487162828445435,True,main
+1000-5000,diffusion,16,0.19818057864904404,0.19809752702713013,8.305162191390991e-05,True,main
+1000-5000,diffusion,24,0.1730281561613083,0.1730695217847824,-4.1365623474121094e-05,True,main
+1000-5000,diffusion,32,0.14989275485277176,0.15120341628789902,-0.0013106614351272583,True,main
+1000-5000,diffusion,48,0.11901484057307243,0.11988622695207596,-0.0008713863790035248,True,main
+200-1000,diffusion,1,0.4998781085014343,0.4998781085014343,0.0,True,main
+200-1000,diffusion,2,0.3656458258628845,0.3656458258628845,0.0,True,main
+200-1000,diffusion,3,0.2917332798242569,0.2917332798242569,0.0,True,main
+200-1000,diffusion,4,0.26174505054950714,0.26174505054950714,0.0,True,main
+200-1000,diffusion,6,0.21292775869369507,0.2126757875084877,0.00025197118520736694,True,main
+200-1000,diffusion,8,0.1834225431084633,0.18393238633871078,-0.0005098432302474976,True,main
+200-1000,diffusion,12,0.14232080429792404,0.14604242891073227,-0.0037216246128082275,True,main
+200-1000,diffusion,16,0.12403840944170952,0.12406252324581146,-2.411380410194397e-05,True,main
+200-1000,diffusion,24,0.08198792114853859,0.08529109135270119,-0.0033031702041625977,True,main
+50-200,diffusion,1,0.4017229676246643,0.4017229676246643,0.0,True,main
+50-200,diffusion,2,0.27761490643024445,0.27761490643024445,0.0,True,main
+50-200,diffusion,3,0.21823964267969131,0.21823964267969131,0.0,True,main
+50-200,diffusion,4,0.19462956488132477,0.19462956488132477,0.0,True,main
+50-200,diffusion,6,0.137489452958107,0.137489452958107,0.0,True,main
+50-200,diffusion,8,0.1026637814939022,0.10266651958227158,-2.738088369369507e-06,True,main
+>=5000,diffusion,1,0.9459766447544098,0.9459766447544098,0.0,True,main
+>=5000,diffusion,2,0.8027426898479462,0.8027426898479462,0.0,True,main
+>=5000,diffusion,3,0.6214940547943115,0.6214940547943115,0.0,True,main
+>=5000,diffusion,4,0.5180269479751587,0.5180269479751587,0.0,True,main
+>=5000,diffusion,6,0.450349897146225,0.45033593475818634,1.3962388038635254e-05,True,main
+>=5000,diffusion,8,0.3914637118577957,0.3914637118577957,0.0,True,main
+>=5000,diffusion,12,0.34439004957675934,0.34283268451690674,0.0015573650598526,True,main
+>=5000,diffusion,16,0.29555484652519226,0.29424789547920227,0.0013069510459899902,True,main
+>=5000,diffusion,24,0.24574466049671173,0.24151454865932465,0.004230111837387085,True,main
+>=5000,diffusion,32,0.21264386177062988,0.21244168281555176,0.000202178955078125,True,main
+>=5000,diffusion,48,0.18508330732584,0.1823217049241066,0.0027616024017333984,True,main
+>=5000,diffusion,64,0.15974578261375427,0.15944016724824905,0.0003056153655052185,True,main
+--- results/05_diff7_convergence/convergence/convergence_choice.csv
+bin,k_cap,chosen_iters,converged,gain_200_500,gain_500_2000,gain_p90_200_500,gain_p90_500_2000
+50-200,8,200,True,0.0034474730491638184,-0.00016725435853004456,0.08358666896820068,0.014199966937303538
+200-1000,24,200,True,0.004989244043827057,-0.0015577934682369232,0.021575265005230902,0.006493207812309264
+1000-5000,48,500,True,0.007322289049625397,-0.0006891004741191864,0.01853727549314499,0.0053543582558631874
+>=5000,64,500,True,0.006843477487564087,0.002311818301677704,0.01930887401103973,0.01153658330440521
+
+================ Bilan (20:57) ================
+OK     1_main
+OK     1_compare
+OK     2_main_wext
+OK     2_compare
+OK     3_convergence
+OK     4_season2017
+OK     4_compare
+Temps total : 407 min
+Résultats : results/05_diff7_convergence/

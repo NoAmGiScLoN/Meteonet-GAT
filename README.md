@@ -620,6 +620,9 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
 | D14 | *(planned)* Graph edges = influence between cells **within a frame**, with relative-geometry edge features | Interaction is spatial; time is handled by the LSTM; plain GAT attention ignores geometry | 1.2 | [§1.2](#12-planned-forecasting-model-gat-within-frames-lstm-along-tracks) |
 | D15 | *(planned)* Temporal dynamics learned by an LSTM along each track | Each cell's evolution is a sequence; a standard, well-tested design for interacting agents (Social-LSTM, STGAT) | 1.2 | [§1.2](#12-planned-forecasting-model-gat-within-frames-lstm-along-tracks) |
 | D16 | *(planned)* Train with a field-space loss through the differentiable renderer | Source sets are non-identifiable, so source-by-source losses are ill-posed | 1.2, 7.6 | [§1.2](#12-planned-forecasting-model-gat-within-frames-lstm-along-tracks); [stability, E2 Jetson report](archive/E2_variable_sources/02_jetson_baseline/report.md) |
+| D17 | Adopt the 7-parameter source `diff7` (`τ` fixed at 0.5) in code | Same error with 12.5 % fewer parameters; per-K gap ≤ 0.005 except on ≥ 5,000 px cells at K ≤ 24 | 9 | [E3 report](archive/E3_diff7_convergence/report.md) |
+| D18 | diff7 `w` table: 0.02–0.5, 16 log-spaced nodes | A wider 0.005–0.5 table reduced pile-up at the sharp edge but made medium cells worse | 9 | [E3 report](archive/E3_diff7_convergence/report.md) |
+| D19 | 200 Adam iterations per wave below 1,000 px, 500 at 1,000 px and above | Gain 200 → 500 is < 0.005 below 1,000 px and ≈ 0.007 above; 2,000 is never better than 500 | 9 | [E3 report](archive/E3_diff7_convergence/report.md) |
 
 **Node layout under consideration** (panel ④ of the pipeline figure in §1.2):
 
@@ -648,7 +651,10 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
 
 ## 11. Next steps
 
-1. **Switch to 7-parameter sources** in the fitting code.
+1. ~~**Switch to 7-parameter sources** in the fitting code.~~ Done: arm `diff7`, with the iteration counts of D19
+   ([E3 report](archive/E3_diff7_convergence/report.md)). Open points from E3:
+   - test a decaying learning rate, since 2,000 iterations per wave is worse than 500;
+   - 23 % of sources sit at the sharpest `w`, which looks like an optimisation effect.
 2. **Choose K per cell from a target error** instead of a cap per size bin. Median parameters to reach 0.15:
    - 16–48 for small cells;
    - ~96 for medium cells;
@@ -686,11 +692,15 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
 │   ├── track_cells.py             # tracker                                           → results/01
 │   ├── cell_dataset.py            # 64×64 patch dataset (Experiment 1)                → results/02/cells.npz
 │   ├── compression_benchmark.py   # Experiment 1                                      → results/02
-│   ├── variable_source_fit.py     # Experiment 2, source fits                         → results/03, 04
+│   ├── variable_source_fit.py     # Experiment 2, source fits (arms gauss, diffusion, diff_tau, diff_w, diff7)
+│   ├── profile_lut.py             # diffusion profile tables (default, and log-spaced w for diff7)
+│   ├── arm_comparison.py          # paired diff7 vs diffusion comparison, w pile-up, reproduction check
+│   ├── convergence_check.py       # iterations per wave (E3)
 │   └── stability_test.py          # Experiment 2, temporal stability                  → results/04/stability
 ├── scripts/
-│   ├── build_samples.py           # rebuilds the non-versioned inputs from DATA/
+│   ├── build_samples.py           # rebuilds the non-versioned inputs from DATA/ (--logw: diff7 tables)
 │   ├── run_jetson.sh              # the 7-step GPU session (Section 7.4)
+│   ├── run_jetson_diff7.sh        # the E3 GPU session (diff7, w tables, convergence)
 │   ├── make_figures.py            # result figures of this report → docs/figures/
 │   └── pipeline_figure.py         # pipeline overview figure (§1.2) → docs/figures/00_pipeline.png
 ├── tests/                         # pytest: archive layout, figure inputs (unit and integration markers)
@@ -703,7 +713,8 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
 │   ├── E1_fixed_vectors/          # results/, report.md
 │   └── E2_variable_sources/
 │       ├── 01_cpu_prelim/         # results/, report.md (CPU preliminary run)
-│       └── 02_jetson_baseline/    # results/, report.md (full Jetson programme)
+│   │   └── 02_jetson_baseline/    # results/, report.md (full Jetson programme)
+│   └── E3_diff7_convergence/      # results/, report.md (diff7, w tables, iterations per wave; tag v1-diff7-convergence)
 └── results/                       # git-ignored: rebuildable inputs + new runs (see results/README.md)
     ├── 01_segmentation_tracking/  # new runs (archived outputs: archive/E0_segmentation_tracking/)
     ├── 02_fixed_vector_benchmark/ # input cells.npz; new runs

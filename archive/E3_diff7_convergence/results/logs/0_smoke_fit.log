@@ -1,0 +1,49 @@
+device : cuda
+4 cellules : {'50-200': 1, '200-1000': 1, '1000-5000': 1, '>=5000': 1}
+table default (24, 16, 128) (0s)
+log-w table loaded: results/05_diff7_convergence/smoke/diffusion_profiles_logw_ace17c5890.pt (key ace17c5890)
+table log-w (1, 16, 128) (0s) clé ace17c5890
+  50-200     diffusion terminé (10s)
+  50-200     diff7     terminé (1s)
+  200-1000   diffusion terminé (2s)
+  200-1000   diff7     terminé (2s)
+  1000-5000  diffusion terminé (3s)
+  1000-5000  diff7     terminé (3s)
+  >=5000     diffusion terminé (3s)
+  >=5000     diff7     terminé (3s)
+
+=== Erreur médiane (nrmse sur sqrt(taux)) à nombre de paramètres égal ===
+Empty DataFrame
+Columns: []
+Index: []
+
+=== Paramètres nécessaires pour atteindre une erreur cible (médiane sur les cellules ; % atteint) ===
+      bin       arm     <= 0.3 <= 0.2 <= 0.15
+   50-200 diffusion  32 (100%) - (0%)  - (0%)
+   50-200     diff7  56 (100%) - (0%)  - (0%)
+ 200-1000 diffusion 128 (100%) - (0%)  - (0%)
+ 200-1000     diff7     - (0%) - (0%)  - (0%)
+1000-5000 diffusion     - (0%) - (0%)  - (0%)
+1000-5000     diff7     - (0%) - (0%)  - (0%)
+   >=5000 diffusion     - (0%) - (0%)  - (0%)
+   >=5000     diff7     - (0%) - (0%)  - (0%)
+
+=== Erreur médiane par nombre de sources K (tous les bras, y compris l'ablation) ===
+arm           diff7  diffusion
+bin       K                   
+1000-5000 3   1.440      1.191
+          6   1.260      0.924
+          12  1.114      0.711
+          24  1.009      0.568
+          48  0.904      0.464
+200-1000  3   0.996      0.745
+          6   0.833      0.482
+          12  0.701      0.324
+          24  0.571      0.235
+50-200    3   0.447      0.342
+          6   0.331      0.232
+>=5000    3   1.160      0.957
+          6   1.059      0.783
+          12  0.992      0.663
+          24  0.921      0.527
+          48  0.837      0.400

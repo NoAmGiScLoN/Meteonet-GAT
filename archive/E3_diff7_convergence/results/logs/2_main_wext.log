@@ -1,0 +1,40 @@
+device : cuda
+160 cellules : {'50-200': 40, '200-1000': 40, '1000-5000': 40, '>=5000': 40}
+log-w table loaded: results/05_diff7_convergence/main_wext/diffusion_profiles_logw_1e980880f3.pt (key 1e980880f3)
+table log-w (1, 24, 128) (0s) clé 1e980880f3
+  50-200     diff7     terminé (89s)
+  200-1000   diff7     terminé (255s)
+  1000-5000  diff7     terminé (659s)
+  >=5000     diff7     terminé (1802s)
+
+=== Erreur médiane (nrmse sur sqrt(taux)) à nombre de paramètres égal ===
+Empty DataFrame
+Columns: []
+Index: []
+
+=== Paramètres nécessaires pour atteindre une erreur cible (médiane sur les cellules ; % atteint) ===
+      bin   arm    <= 0.3    <= 0.2   <= 0.15
+   50-200 diff7 14 (100%)  28 (90%)  42 (75%)
+ 200-1000 diff7 28 (100%) 56 (100%)  84 (85%)
+1000-5000 diff7 56 (100%) 168 (95%) 224 (75%)
+   >=5000 diff7 168 (98%) 280 (75%) 448 (38%)
+
+=== Erreur médiane par nombre de sources K (tous les bras, y compris l'ablation) ===
+arm           diff7
+bin       K        
+1000-5000 3   0.446
+          6   0.318
+          12  0.249
+          24  0.184
+          48  0.120
+200-1000  3   0.301
+          6   0.216
+          12  0.151
+          24  0.090
+50-200    3   0.225
+          6   0.145
+>=5000    3   0.650
+          6   0.460
+          12  0.369
+          24  0.260
+          48  0.187

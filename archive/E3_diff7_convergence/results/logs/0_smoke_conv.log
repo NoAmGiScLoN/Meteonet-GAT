@@ -1,0 +1,28 @@
+log-w table loaded: results/05_diff7_convergence/smoke_conv/diffusion_profiles_logw_ace17c5890.pt (key ace17c5890)
+4 cellules, bras diff7, niveaux [2, 4], clé de table ace17c5890
+  groupe de 1 cellules, 2 itérations : 0.3 s
+  groupe de 1 cellules, 4 itérations : 0.6 s
+classe 50-200 terminée (1 cellules), 0.9 s écoulées
+  pic mémoire CUDA : 0.00 Go
+  groupe de 1 cellules, 2 itérations : 1.0 s
+  groupe de 1 cellules, 4 itérations : 1.6 s
+classe 200-1000 terminée (1 cellules), 3.6 s écoulées
+  pic mémoire CUDA : 0.00 Go
+  groupe de 1 cellules, 2 itérations : 1.4 s
+  groupe de 1 cellules, 4 itérations : 2.3 s
+classe 1000-5000 terminée (1 cellules), 7.4 s écoulées
+  pic mémoire CUDA : 0.00 Go
+  groupe de 1 cellules, 2 itérations : 1.2 s
+  groupe de 1 cellules, 4 itérations : 2.3 s
+classe >=5000 terminée (1 cellules), 10.9 s écoulées
+  pic mémoire CUDA : 0.04 Go
+classe 50-200 : pas de convergence (gain >= 0.005 à chaque niveau), niveau retenu 4
+classe 200-1000 : pas de convergence (gain >= 0.005 à chaque niveau), niveau retenu 4
+classe 1000-5000 : pas de convergence (gain >= 0.005 à chaque niveau), niveau retenu 4
+classe >=5000 : pas de convergence (gain >= 0.005 à chaque niveau), niveau retenu 4
+
+      bin  k_cap  chosen_iters  converged  gain_2_4  gain_p90_2_4
+   50-200      8             4      False  0.219002      0.219002
+ 200-1000     24             4      False  0.271982      0.271982
+1000-5000     48             4      False  0.297146      0.297146
+   >=5000     64             4      False  0.197868      0.197868
