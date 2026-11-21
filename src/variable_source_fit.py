@@ -39,6 +39,8 @@ from cell_delimitation import DATA_DIR, STRUCT_8, THRESHOLD_RAW, segment
 from cell_dataset import FILES, FRAME_STEP, MIN_AREA
 from profile_lut import (DEFAULT_N_W, L_LUT, LogWLutSpec, default_w_nodes, diffuse_profiles,
                          load_or_build_logw_lut)
+from optim_schedule import (LR_DEFAULT, LR_SCHEDULE_CHOICES, make_scheduler, positive_float,
+                            validate_lr)
 
 OUT = Path(__file__).resolve().parent.parent / "results" / "03_variable_sources"
 MARGIN = 3  # pixels autour de la boîte englobante (cible = 0) : pénalise le débordement
@@ -237,9 +239,12 @@ def metrics(rec, T, valid):
 
 
 # ------------------------------------------------------------------ ajustement d'un groupe de cellules
-def fit_group(cells, kind, kmax, iters, lut5, snap_k=(), rng=None):
+def fit_group(cells, kind, kmax, iters, lut5, snap_k=(), rng=None, *, lr: float = LR_DEFAULT,
+              lr_schedule: str | None = None):
     """kind : gauss | diffusion | diff_tau | diff_w | diff7.  rng : perturbation de l'initialisation (ou None).
+    lr / lr_schedule : taux Adam et planning (None | "cosine", relancé à chaque vague).
     Retourne (enregistrements par K, images, paramètres finaux (B, kmax, P) et masque actif, sur CPU)."""
+    validate_lr(lr, lr_schedule)
     check_lut_depth(kind, lut5)
     rkind = "gauss" if kind == "gauss" else "diffusion"
     frozen = ARM_FIXED.get(kind, [])
@@ -285,7 +290,8 @@ def fit_group(cells, kind, kmax, iters, lut5, snap_k=(), rng=None):
                 res[max(y - sup, 0):y + sup + 1, max(x - sup, 0):x + sup + 1] = -1e9
         k_cur = K
         params.requires_grad_(True)
-        opt = torch.optim.Adam([params], lr=0.05)
+        opt = torch.optim.Adam([params], lr=lr)
+        sched = make_scheduler(opt, lr_schedule, iters, lr)
         npix = valid.sum((1, 2))
         for _ in range(iters):
             rec = render_windowed(params, active, Hm, Wm, rkind, lut5)
@@ -295,6 +301,8 @@ def fit_group(cells, kind, kmax, iters, lut5, snap_k=(), rng=None):
             for col in frozen:
                 params.grad[..., col] = 0
             opt.step()
+            if sched is not None:
+                sched.step()
         params = params.detach()
         with torch.no_grad():
             rec = render_windowed(params, active, Hm, Wm, rkind, lut5)
@@ -371,6 +379,9 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--per-bin", type=int, default=40)
     ap.add_argument("--iters", type=positive_int, default=None,
                     help="itérations par vague, pour toutes les classes (défaut : ITERS_BY_BIN)")
+    ap.add_argument("--lr", type=positive_float, default=LR_DEFAULT, help="taux d'apprentissage Adam")
+    ap.add_argument("--lr-schedule", choices=LR_SCHEDULE_CHOICES, default="none",
+                    help="planning du taux, relancé à chaque vague (défaut : none = constant)")
     ap.add_argument("--arms", nargs="+", default=["diff7"])
     ap.add_argument("--bins", nargs="+", default=[b[0] for b in BINS], help="classes de taille à traiter")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -423,13 +434,15 @@ def fit_bin(name: str, kmax: int, group: list[dict], args: argparse.Namespace, l
     records: list[dict] = []
     iters = iters_for_bin(name, args.iters)
     print(f"  {name:10s} {iters} itérations par vague", flush=True)
+    lr_schedule = None if args.lr_schedule == "none" else args.lr_schedule
     for arm in args.arms:
         t0, saved = time.time(), {}
         lut5 = luts["log-w" if arm == "diff7" else "default"]
         for g0 in range(0, len(group), GROUP[name]):
             gr = group[g0:g0 + GROUP[name]]
             snap_k = (6, 8, 12, 16) if g0 == 0 else ()
-            rec, sn, (prm, act) = fit_group(gr, arm, kmax, iters, lut5, snap_k, rng)
+            rec, sn, (prm, act) = fit_group(gr, arm, kmax, iters, lut5, snap_k, rng, lr=args.lr,
+                                            lr_schedule=lr_schedule)
             records += rec
             saved.update(params_by_cell(gr, prm, act))
             for K, img in sn.items():
