@@ -3,7 +3,7 @@ resolution -> fitted diffusion sources -> node tensor -> graph (cells at t and t
 
 Usage (from the repository root):  python scripts/pipeline_figure.py
 Needs DATA/ (MeteoNet), results/03_variable_sources/diffusion_profiles.pt (scripts/build_samples.py) and
-results/01_segmentation_tracking/T1_detections.csv. Writes docs/figures/00_pipeline.png.
+archive/E0_segmentation_tracking/results/T1_detections.csv. Writes docs/figures/00_pipeline.png.
 """
 import math
 import sys
@@ -32,7 +32,7 @@ K_MAX = 12                      # sources fitted for the example cell
 FIT_ITERS = 200
 INFLUENCE_RADIUS_PX = 200       # illustration: candidate influence edge if centroids are closer than this
 PX_KM2 = 0.8
-DETECTIONS = ROOT / "results" / "01_segmentation_tracking" / "T1_detections.csv"
+DETECTIONS = ROOT / "archive" / "E0_segmentation_tracking" / "results" / "T1_detections.csv"
 OUT = ROOT / "docs" / "figures" / "00_pipeline.png"
 INK, MUTED, ACCENT, ACCENT2, NODE = "#0b0b0b", "#52514e", "#eb6834", "#2a78d6", "#9fb8d9"
 

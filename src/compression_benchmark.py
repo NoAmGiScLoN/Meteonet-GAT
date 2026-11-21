@@ -1,12 +1,14 @@
 """Benchmark de compression des cellules : chaque cellule (patch PxP, P=32 par défaut du champ sqrt(taux mm/h)) -> vecteur de
 dimension d -> reconstruction. Évalué sur des jours de test jamais vus.
 
-Bras : mean (d=0), pca, zernike, ae (décodeur CNN appris), gmm (décodeur = K noyaux de chaleur anisotropes),
+Bras : mean (d=0), pca, zernike, ae (décodeur CNN appris),
        diffusion (décodeur = K sources + diffusion explicite avec D(x,y) variable, 3 paramètres de champ D).
 Tous les bras reconstruisent à partir du seul vecteur de dimension d (les moments géométriques, communs à tous
 les bras, sont stockés à part et ne participent pas à la reconstruction).
+Le bras gmm (décodeur gaussien) a été retiré : il s'effondrait à d = 48 (sortie nulle, lr 2e-3 et 5e-4) ; ses
+résultats aux plus petites dimensions restent dans results.json.
 
-Usage : python compression_benchmark.py --arms pca zernike ae gmm diffusion --dims 6 12 18 30 48
+Usage : python compression_benchmark.py --arms pca zernike ae diffusion --dims 6 12 18 30 48
 """
 import argparse
 import json
@@ -135,27 +137,6 @@ def grid(n):
     return X, Y
 
 
-class GaussDecoder(nn.Module):
-    """K noyaux de chaleur anisotropes (x, y, amplitude, log sigma_a, log sigma_b, angle) = 6 paramètres chacun."""
-    def __init__(self, d):
-        super().__init__()
-        self.K = d // 6
-        X, Y = grid(P)
-        self.register_buffer("X", X)
-        self.register_buffer("Y", Y)
-
-    def forward(self, p):
-        p = p.view(-1, self.K, 6, 1, 1)
-        mx, my = torch.tanh(p[:, :, 0]), torch.tanh(p[:, :, 1])
-        amp = F.softplus(p[:, :, 2]) * 3
-        sa, sb = torch.exp(p[:, :, 3].clamp(-4.5, 0.7)), torch.exp(p[:, :, 4].clamp(-4.5, 0.7))
-        th = p[:, :, 5]
-        dx, dy = self.X - mx, self.Y - my
-        u = torch.cos(th) * dx + torch.sin(th) * dy
-        v = -torch.sin(th) * dx + torch.cos(th) * dy
-        return (amp * torch.exp(-0.5 * (u ** 2 / sa ** 2 + v ** 2 / sb ** 2))).sum(1, keepdim=True)
-
-
 class DiffusionDecoder(nn.Module):
     """K sources ponctuelles (x, y, masse) + champ de diffusivité log D = a0 + a1 x + a2 y (3 paramètres),
     diffusion explicite conservative (flux nul au bord) pendant `steps` pas sur grille 32x32, puis sur-échantillonnage."""
@@ -203,11 +184,6 @@ def init_physical(enc, per, K, base, extra=()):
 def make_model(arm, d):
     if arm == "ae":
         return Encoder(d), CNNDecoder(d), d
-    if arm == "gmm":
-        K = d // 6
-        enc = Encoder(K * 6)
-        init_physical(enc, 6, K, [0, 0, 0, -1.2, -1.2, 0])
-        return enc, GaussDecoder(d), K * 6
     if arm == "diffusion":
         K = (d - 3) // 3
         enc = Encoder(3 * K + 3)
@@ -250,7 +226,8 @@ def run_neural(arm, d, s_tr, s_te, epochs, seed=0, bs=128, lr=2e-3, device="cpu"
 # --------------------------------------------------------------------- main
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--arms", nargs="+", default=["mean", "pca", "zernike", "ae", "gmm", "diffusion"])
+    ap.add_argument("--arms", nargs="+", default=["mean", "pca", "zernike", "ae", "diffusion"],
+                    choices=["mean", "pca", "zernike", "ae", "diffusion"])
     ap.add_argument("--dims", nargs="+", type=int, default=[6, 12, 18, 30, 48])
     ap.add_argument("--epochs", type=int, default=40)
     ap.add_argument("--max-train", type=int, default=0, help="sous-échantillonne l'entraînement (tests rapides)")

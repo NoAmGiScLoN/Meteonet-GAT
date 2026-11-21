@@ -1,0 +1,6 @@
+main
+      bin  k_cap  max_delta  max_abs_delta  delta_at_cap  passes    criterion sided
+1000-5000     48   0.005053       0.005053      0.003116   False paired_delta   one
+ 200-1000     24   0.005032       0.005032      0.002431   False paired_delta   one
+   50-200      8   0.000711       0.003553     -0.003553    True paired_delta   one
+   >=5000     64   0.020007       0.020007      0.001628   False paired_delta   one

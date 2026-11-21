@@ -1,4 +1,6 @@
-"""Generate every figure used in README.md from the result files committed in results/.
+"""Generate every figure used in README.md from the result files committed in archive/*/results/.
+
+New runs write to results/; copy their outputs into archive/ (with a report.md) before regenerating figures.
 
 Usage (from the repository root):  python scripts/make_figures.py
 Needs numpy, pandas, matplotlib. The raw MeteoNet data in DATA/ is only needed for the radar-map figure
@@ -17,7 +19,10 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
 ROOT = Path(__file__).resolve().parent.parent
-RES = ROOT / "results"
+# Sorties committées des expériences passées, archivées (voir archive/)
+E0_RES = ROOT / "archive" / "E0_segmentation_tracking" / "results"
+E1_RES = ROOT / "archive" / "E1_fixed_vectors" / "results"
+E2_JETSON_RES = ROOT / "archive" / "E2_variable_sources" / "02_jetson_baseline" / "results"
 FIG = ROOT / "docs" / "figures"
 FIG.mkdir(parents=True, exist_ok=True)
 
@@ -42,7 +47,7 @@ plt.rcParams.update({
 
 
 def load_fits(run):
-    return pd.concat([pd.read_csv(p) for p in sorted((RES / "04_jetson_run" / run).glob("fits_*.csv"))])
+    return pd.concat([pd.read_csv(p) for p in sorted((E2_JETSON_RES / run).glob("fits_*.csv"))])
 
 
 def median_curve(df, arm, b, x="n_params", y="nrmse"):
@@ -88,8 +93,8 @@ def fig_radar_map():
 
 # ---------------------------------------------------------------- 2. fixed-vector benchmark
 def fig_fixed_benchmark():
-    r = json.loads((RES / "02_fixed_vector_benchmark" / "results.json").read_text())
-    rj = json.loads((RES / "02_fixed_vector_benchmark" / "results_jetson.json").read_text())
+    r = json.loads((E1_RES / "results.json").read_text())
+    rj = json.loads((E1_RES / "results_jetson.json").read_text())
     fig, axs = plt.subplots(1, 2, figsize=(11, 3.8), constrained_layout=True)
     arms = [("pca", "pca"), ("zernike", "zernike"), ("gmm", "gauss"), ("diffusion", "diffusion"), ("ae", "ae")]
     for key, metric, ax in [("nrmse", "nrmse", axs[0]), ("iou", "iou", axs[1])]:
@@ -137,7 +142,7 @@ def fig_rate_distortion(run="main", name="03_variable_sources_rate_distortion.pn
 
 # ---------------------------------------------------------------- 4. reconstructions
 def fig_snapshots():
-    s = pickle.loads((RES / "04_jetson_run" / "main" / "snapshots.pkl").read_bytes())
+    s = pickle.loads((E2_JETSON_RES / "main" / "snapshots.pkl").read_bytes())
     pick = {"50-200": (8, 6), "200-1000": (16, 12), "1000-5000": (16, 12), ">=5000": (16, 12)}
     fig, axs = plt.subplots(4, 3, figsize=(10, 11), constrained_layout=True)
     for i, b in enumerate(BINS):
@@ -214,7 +219,7 @@ def fig_restart():
 
 # ---------------------------------------------------------------- 8. stability
 def fig_stability():
-    st = pd.read_csv(RES / "04_jetson_run" / "stability" / "stability.csv")
+    st = pd.read_csv(E2_JETSON_RES / "stability" / "stability.csv")
     st["ratio"] = st.cost_same / st.cost_other
     fig, ax = plt.subplots(figsize=(8, 3.6), constrained_layout=True)
     rng = np.random.default_rng(0)
@@ -263,9 +268,9 @@ def fig_params_needed():
 
 
 def copy_existing():
-    for src, dst in [(RES / "01_segmentation_tracking" / "S2_overlay.png", "01b_segmentation_overlay.png"),
-                     (RES / "01_segmentation_tracking" / "T1_tracks.png", "01c_tracking.png"),
-                     (RES / "02_fixed_vector_benchmark" / "cnn_encoder_schematic.png", "02b_cnn_encoder.png")]:
+    for src, dst in [(E0_RES / "S2_overlay.png", "01b_segmentation_overlay.png"),
+                     (E0_RES / "T1_tracks.png", "01c_tracking.png"),
+                     (E1_RES / "cnn_encoder_schematic.png", "02b_cnn_encoder.png")]:
         shutil.copy(src, FIG / dst)
         print("copied", FIG / dst)
 
