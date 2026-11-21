@@ -355,10 +355,21 @@ def iters_for_bin(name: str, override: int | None) -> int:
     return override
 
 
+def positive_int(text: str) -> int:
+    """Type argparse : entier >= 1 ; sinon ArgumentTypeError (échec dès l'analyse de la ligne de commande)."""
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"entier attendu, reçu {text!r}") from None
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"doit être >= 1, reçu {value}")
+    return value
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser()
     ap.add_argument("--per-bin", type=int, default=40)
-    ap.add_argument("--iters", type=int, default=None,
+    ap.add_argument("--iters", type=positive_int, default=None,
                     help="itérations par vague, pour toutes les classes (défaut : ITERS_BY_BIN)")
     ap.add_argument("--arms", nargs="+", default=["diff7"])
     ap.add_argument("--bins", nargs="+", default=[b[0] for b in BINS], help="classes de taille à traiter")
