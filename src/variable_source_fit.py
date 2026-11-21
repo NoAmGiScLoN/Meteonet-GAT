@@ -16,7 +16,10 @@ log-espacés (--w-min --w-max --n-w --tau7), construite à part (le tableau par 
 --save-params : écrit les paramètres finaux par cellule.  --seed > 0 : perturbe l'initialisation (test de robustesse aux redémarrages).
 --sample : échantillon de cellules pré-construit (pickle), par ex. une autre saison.
 
-Usage : python variable_source_fit.py [--per-bin 40] [--iters 200] [--arms gauss diffusion] [--device cuda]
+--iters absent : itérations par vague selon la classe de taille (ITERS_BY_BIN) ; présent : valeur imposée à toutes les classes.
+--arms par défaut : diff7.
+
+Usage : python variable_source_fit.py [--per-bin 40] [--iters N] [--arms diff7] [--device cuda]
 """
 import argparse
 import json
@@ -41,6 +44,7 @@ OUT = Path(__file__).resolve().parent.parent / "results" / "03_variable_sources"
 MARGIN = 3  # pixels autour de la boîte englobante (cible = 0) : pénalise le débordement
 BINS = [("50-200", 50, 200, 8), ("200-1000", 200, 1000, 24), ("1000-5000", 1000, 5000, 48),
         (">=5000", 5000, 10 ** 9, 64)]  # (nom, aire min, aire max, K max)
+ITERS_BY_BIN = {"50-200": 200, "200-1000": 200, "1000-5000": 500, ">=5000": 500}  # itérations par vague (D19)
 GROUP = {"50-200": 40, "200-1000": 20, "1000-5000": 10, ">=5000": 4}  # cellules optimisées ensemble
 SCHEDULE = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]
 EPS = 1e-3
@@ -340,11 +344,23 @@ def summarize(df):
     return t1, t2
 
 
+def iters_for_bin(name: str, override: int | None) -> int:
+    """Itérations par vague pour la classe `name` : `override` s'il est donné, sinon ITERS_BY_BIN."""
+    if name not in ITERS_BY_BIN:
+        raise ValueError(f"classe de taille inconnue : {name!r}")
+    if override is None:
+        return ITERS_BY_BIN[name]
+    if override < 1:
+        raise ValueError(f"--iters doit être >= 1, reçu {override}")
+    return override
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser()
     ap.add_argument("--per-bin", type=int, default=40)
-    ap.add_argument("--iters", type=int, default=200)
-    ap.add_argument("--arms", nargs="+", default=["gauss", "diffusion"])
+    ap.add_argument("--iters", type=int, default=None,
+                    help="itérations par vague, pour toutes les classes (défaut : ITERS_BY_BIN)")
+    ap.add_argument("--arms", nargs="+", default=["diff7"])
     ap.add_argument("--bins", nargs="+", default=[b[0] for b in BINS], help="classes de taille à traiter")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--out", default=str(OUT), help="dossier des résultats (contient l'échantillon en cache)")
@@ -394,13 +410,15 @@ def fit_bin(name: str, kmax: int, group: list[dict], args: argparse.Namespace, l
             rng: np.random.Generator | None, snaps: dict) -> list[dict]:
     """Fit every arm on the cells of one size class; saves params (if asked), updates `snaps`; returns records."""
     records: list[dict] = []
+    iters = iters_for_bin(name, args.iters)
+    print(f"  {name:10s} {iters} itérations par vague", flush=True)
     for arm in args.arms:
         t0, saved = time.time(), {}
         lut5 = luts["log-w" if arm == "diff7" else "default"]
         for g0 in range(0, len(group), GROUP[name]):
             gr = group[g0:g0 + GROUP[name]]
             snap_k = (6, 8, 12, 16) if g0 == 0 else ()
-            rec, sn, (prm, act) = fit_group(gr, arm, kmax, args.iters, lut5, snap_k, rng)
+            rec, sn, (prm, act) = fit_group(gr, arm, kmax, iters, lut5, snap_k, rng)
             records += rec
             saved.update(params_by_cell(gr, prm, act))
             for K, img in sn.items():

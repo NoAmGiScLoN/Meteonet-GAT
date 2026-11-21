@@ -692,7 +692,7 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
 │   ├── track_cells.py             # tracker                                           → results/01
 │   ├── cell_dataset.py            # 64×64 patch dataset (Experiment 1)                → results/02/cells.npz
 │   ├── compression_benchmark.py   # Experiment 1                                      → results/02
-│   ├── variable_source_fit.py     # Experiment 2, source fits (arms gauss, diffusion, diff_tau, diff_w, diff7)
+│   ├── variable_source_fit.py     # Experiment 2, source fits (default arm diff7, D17; 200/500 iterations per wave by size, D19)
 │   ├── profile_lut.py             # diffusion profile tables (default, and log-spaced w for diff7)
 │   ├── arm_comparison.py          # paired diff7 vs diffusion comparison, w pile-up, reproduction check
 │   ├── convergence_check.py       # iterations per wave (E3)
