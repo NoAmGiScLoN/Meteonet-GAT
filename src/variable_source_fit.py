@@ -46,7 +46,7 @@ OUT = Path(__file__).resolve().parent.parent / "results" / "03_variable_sources"
 MARGIN = 3  # pixels autour de la boîte englobante (cible = 0) : pénalise le débordement
 BINS = [("50-200", 50, 200, 8), ("200-1000", 200, 1000, 24), ("1000-5000", 1000, 5000, 48),
         (">=5000", 5000, 10 ** 9, 64)]  # (nom, aire min, aire max, K max)
-ITERS_BY_BIN = {"50-200": 200, "200-1000": 200, "1000-5000": 500, ">=5000": 500}  # itérations par vague (D19)
+ITERS_BY_BIN = {"50-200": 200, "200-1000": 500, "1000-5000": 500, ">=5000": 500}  # itérations par vague (D19, D22)
 GROUP = {"50-200": 40, "200-1000": 20, "1000-5000": 10, ">=5000": 4}  # cellules optimisées ensemble
 SCHEDULE = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]
 EPS = 1e-3

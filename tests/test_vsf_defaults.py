@@ -1,4 +1,4 @@
-"""Décisions D17 (bras par défaut = diff7) et D19 (itérations par classe de taille)."""
+"""Décisions D17 (bras par défaut = diff7) et D19/D22 (itérations par classe de taille ; D22 : 500 dès 200 px)."""
 import functools
 import pickle
 import sys
@@ -9,7 +9,7 @@ import profile_lut as pl
 import variable_source_fit as vsf
 
 TINY = dict(n=32, steps=60, n_r=32)
-EXPECTED_ITERS = {"50-200": 200, "200-1000": 200, "1000-5000": 500, ">=5000": 500}
+EXPECTED_ITERS = {"50-200": 200, "200-1000": 500, "1000-5000": 500, ">=5000": 500}
 
 
 @pytest.mark.unit
