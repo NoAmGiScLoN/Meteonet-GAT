@@ -1,0 +1,9 @@
+bin,k_cap,setting,iters,median_gain,p10_gain,adopt,cheap_match,baseline_iters,recommended
+50-200,8,fixed:0.05,5,0.0,0.0,False,False,5,True
+50-200,8,cosine:0.05,5,-0.11980527639389038,-0.11980527639389038,False,False,5,False
+200-1000,24,fixed:0.05,5,0.0,0.0,False,False,5,True
+200-1000,24,cosine:0.05,5,-0.2497207522392273,-0.2497207522392273,False,False,5,False
+1000-5000,48,fixed:0.05,5,0.0,0.0,False,False,5,True
+1000-5000,48,cosine:0.05,5,-0.2552652359008789,-0.2552652359008789,False,False,5,False
+>=5000,64,fixed:0.05,5,0.0,0.0,False,False,5,True
+>=5000,64,cosine:0.05,5,-0.16978490352630615,-0.16978490352630615,False,False,5,False
