@@ -29,7 +29,11 @@ from scipy.optimize import linear_sum_assignment
 import variable_source_fit as vsf
 from cell_delimitation import DATA_DIR, STRUCT_8, THRESHOLD_RAW, segment
 from cell_dataset import FILES, FRAME_STEP, MIN_AREA
+from profile_lut import LogWLutSpec
 
+PER_BIN_DEFAULT = 25
+ITERS_DEFAULT = 200
+ARMS_DEFAULT = ("gauss", "diffusion")
 K_FIXED = {"50-200": 3, "200-1000": 6, "1000-5000": 12, ">=5000": 24}
 
 
@@ -115,25 +119,73 @@ def match(D0, D1):
     return float(C[r, c].mean()), absd.mean(0)
 
 
-def main():
+class UniqueArms(argparse.Action):
+    """--arms : refuse un bras répété (il serait ajusté deux fois et dupliquerait les lignes)."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        dupes = sorted({a for a in values if values.count(a) > 1})
+        if dupes:
+            parser.error(f"--arms : bras répété(s) : {', '.join(dupes)}")
+        setattr(namespace, self.dest, list(values))
+
+
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser()
     ap.add_argument("--build", action="store_true", help="construire les paires depuis les données brutes")
-    ap.add_argument("--per-bin", type=int, default=25)
-    ap.add_argument("--iters", type=int, default=200)
+    ap.add_argument("--per-bin", type=int, default=PER_BIN_DEFAULT)
+    iters = ap.add_mutually_exclusive_group()
+    iters.add_argument("--iters", type=vsf.positive_int, default=ITERS_DEFAULT)
+    iters.add_argument("--iters-by-bin", action="store_true",
+                    help="itérations par classe selon ITERS_BY_BIN (D19) au lieu de --iters pour toutes")
+    ap.add_argument("--arms", nargs="+", default=list(ARMS_DEFAULT), choices=list(NAMES),
+                    action=UniqueArms)
+    ap.add_argument("--pairs", default=None, help="paires pré-construites (défaut : <out>/stability_pairs_<per-bin>.pkl)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--out", default=str(vsf.OUT))
-    args = ap.parse_args()
-    out = Path(args.out)
-    pairs_path = out / f"stability_pairs_{args.per_bin}.pkl"
-    if args.build:
-        build_pairs(args.per_bin, pairs_path)
-        return
+    d = LogWLutSpec()  # table log-w du bras diff7
+    ap.add_argument("--w-min", type=float, default=d.w_min)
+    ap.add_argument("--w-max", type=float, default=d.w_max)
+    ap.add_argument("--n-w", type=int, default=d.n_w)
+    ap.add_argument("--tau7", type=float, default=d.tau)
+    ap.add_argument("--n-r", type=int, default=d.n_r, help="résolution radiale de la table (tests rapides)")
+    ap.add_argument("--lut-n", type=int, default=d.n, help="grille de la PDE de la table (tests rapides)")
+    ap.add_argument("--lut-steps", type=int, default=d.steps, help="pas de la PDE de la table (tests rapides)")
+    return ap
 
-    vsf.OUT = out
-    vsf.DEVICE = torch.device(args.device)
-    print("device :", vsf.DEVICE, flush=True)
-    lut5 = vsf.build_profile_lut()[None, None].to(vsf.DEVICE)
-    sample = pickle.loads(pairs_path.read_bytes())
+
+def build_arm_luts(arms: list[str], out: Path, spec: LogWLutSpec) -> dict[str, torch.Tensor | None]:
+    """Une table par bras (None pour gauss), construite une seule fois chacune."""
+    return {arm: vsf.lut_for_arm(arm, out, spec) for arm in arms}
+
+
+def fit_arm(cells: list[dict], name: str, arm: str, iters: int, lut5: torch.Tensor | None
+            ) -> tuple[list[np.ndarray], dict[int, float]]:
+    """Ajuste les cellules d'une classe avec un bras ; retourne (descripteurs par id de cellule, nrmse par id)."""
+    desc, err = [None] * len(cells), {}
+    for g0 in range(0, len(cells), vsf.GROUP[name]):
+        gr = cells[g0:g0 + vsf.GROUP[name]]
+        recs, _, (params, active) = vsf.fit_group(gr, arm, K_FIXED[name], iters, lut5)
+        for b, c in enumerate(gr):
+            desc[c["id"]] = descriptors(params[b], active[b], c, arm)
+        for r in recs:
+            if r["K"] == K_FIXED[name]:
+                err[r["cell"]] = r["nrmse"]
+    return desc, err
+
+
+def pair_rows(prs: list[tuple[dict, dict, float]], desc: list[np.ndarray], err: dict[int, float], name: str, arm: str) -> list[dict]:
+    """Une ligne par paire : coût même cellule vs autre cellule, erreurs d'ajustement, écarts par paramètre."""
+    n, rows = len(prs), []
+    for i in range(n):
+        same, absd = match(desc[i], desc[n + i])
+        other, _ = match(desc[i], desc[n + (i + 1) % n])  # référence : une autre cellule à t + 5 min
+        rows.append(dict(bin=name, arm=arm, K=K_FIXED[name], pair=i, iou_raw=prs[i][2],
+                         nrmse_t=err[i], nrmse_t1=err[n + i], cost_same=same, cost_other=other,
+                         **{f"d_{nm}": v for nm, v in zip(NAMES[arm], absd)}))
+    return rows
+
+
+def run_fits(sample: list[tuple[dict, dict, float]], args: argparse.Namespace, luts: dict[str, torch.Tensor | None]) -> pd.DataFrame:
     rows = []
     for name, *_ in vsf.BINS:
         prs = [s for s in sample if s[0]["bin"] == name]
@@ -142,27 +194,16 @@ def main():
         cells = [p[0] for p in prs] + [p[1] for p in prs]
         for k, c in enumerate(cells):
             c["id"] = k
-        n = len(prs)
-        for arm in ["gauss", "diffusion"]:
+        iters = vsf.iters_for_bin(name, None if args.iters_by_bin else args.iters)
+        for arm in args.arms:
             t0 = time.time()
-            desc, err = [None] * len(cells), {}
-            for g0 in range(0, len(cells), vsf.GROUP[name]):
-                gr = cells[g0:g0 + vsf.GROUP[name]]
-                recs, _, (params, active) = vsf.fit_group(gr, arm, K_FIXED[name], args.iters, lut5)
-                for b, c in enumerate(gr):
-                    desc[c["id"]] = descriptors(params[b], active[b], c, arm)
-                for r in recs:
-                    if r["K"] == K_FIXED[name]:
-                        err[r["cell"]] = r["nrmse"]
-            for i in range(n):
-                same, absd = match(desc[i], desc[n + i])
-                other, _ = match(desc[i], desc[n + (i + 1) % n])  # référence : une autre cellule à t + 5 min
-                rows.append(dict(bin=name, arm=arm, K=K_FIXED[name], pair=i, iou_raw=prs[i][2],
-                                 nrmse_t=err[i], nrmse_t1=err[n + i], cost_same=same, cost_other=other,
-                                 **{f"d_{nm}": v for nm, v in zip(NAMES[arm], absd)}))
+            desc, err = fit_arm(cells, name, arm, iters, luts[arm])
+            rows += pair_rows(prs, desc, err, name, arm)
             print(f"  {name:10s} {arm:9s} terminé ({time.time() - t0:.0f}s)", flush=True)
-    df = pd.DataFrame(rows)
-    df.to_csv(out / "stability.csv", index=False)
+    return pd.DataFrame(rows)
+
+
+def print_summary(df: pd.DataFrame) -> None:
     summ = df.groupby(["bin", "arm"]).agg(K=("K", "first"), n=("pair", "count"), nrmse=("nrmse_t", "median"),
                                           cost_same=("cost_same", "median"), cost_other=("cost_other", "median"))
     summ["ratio"] = summ.cost_same / summ.cost_other
@@ -171,6 +212,30 @@ def main():
     print("\n=== Écart absolu moyen par paramètre, même cellule (médiane sur les paires) ===")
     dcols = [c for c in df.columns if c.startswith("d_")]
     print(df.groupby(["bin", "arm"])[dcols].median().round(3).to_string())
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
+    out = Path(args.out)
+    pairs_path = Path(args.pairs) if args.pairs else out / f"stability_pairs_{args.per_bin}.pkl"
+    if args.build:
+        build_pairs(args.per_bin, pairs_path)
+        return
+
+    old_out, old_device = vsf.OUT, vsf.DEVICE
+    vsf.OUT = out
+    vsf.DEVICE = torch.device(args.device)
+    try:
+        print("device :", vsf.DEVICE, flush=True)
+        spec = LogWLutSpec(w_min=args.w_min, w_max=args.w_max, n_w=args.n_w, tau=args.tau7, n_r=args.n_r,
+                           n=args.lut_n, steps=args.lut_steps)
+        sample = pickle.loads(pairs_path.read_bytes())  # fichier local de confiance (paires construites par --build)
+        luts = build_arm_luts(args.arms, out, spec)
+        df = run_fits(sample, args, luts)
+    finally:
+        vsf.OUT, vsf.DEVICE = old_out, old_device
+    df.to_csv(out / "stability.csv", index=False)
+    print_summary(df)
 
 
 if __name__ == "__main__":

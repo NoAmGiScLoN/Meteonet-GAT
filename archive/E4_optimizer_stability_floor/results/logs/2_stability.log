@@ -1,0 +1,21 @@
+device : cuda
+  50-200     diff7     terminé (84s)
+  200-1000   diff7     terminé (217s)
+  1000-5000  diff7     terminé (1338s)
+  >=5000     diff7     terminé (5815s)
+
+=== Stabilité : écart médian entre ensembles de sources (même cellule à 5 min vs cellules différentes) ===
+                  K   n  nrmse  cost_same  cost_other  ratio
+bin       arm                                               
+1000-5000 diff7  12  25  0.213      1.341       2.776  0.483
+200-1000  diff7   6  25  0.215      1.399       2.813  0.497
+50-200    diff7   3  25  0.238      1.047       2.023  0.517
+>=5000    diff7  24  25  0.269      1.591       4.887  0.325
+
+=== Écart absolu moyen par paramètre, même cellule (médiane sur les paires) ===
+                   d_x    d_y  d_logA  d_log_a  d_log_b  d_angle    d_w
+bin       arm                                                          
+1000-5000 diff7  0.365  0.260   0.391    0.311    0.297    0.199  0.191
+200-1000  diff7  0.365  0.297   0.397    0.335    0.261    0.178  0.201
+50-200    diff7  0.311  0.117   0.280    0.222    0.226    0.077  0.133
+>=5000    diff7  0.301  0.248   0.404    0.296    0.301    0.181  0.199
