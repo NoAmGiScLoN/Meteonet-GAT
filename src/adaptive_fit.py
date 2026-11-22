@@ -85,16 +85,18 @@ def compression_k_limit(area: int, n_par: int, frac: float | None) -> int | None
 
 def stop_reason(nrmse: float, k_target: int, k_cap: int, k_limit: int | None,
                 schedule_exhausted: bool, target: float) -> str | None:
-    """Priorite : diverged (nrmse non fini) > target > cap > compression ; None = continuer."""
+    """Priorite : diverged (nrmse non fini) > target > cap (cible = plafond) > compression > cap (calendrier epuise).
+
+    k_limit == k_cap donne "cap" ; None = continuer."""
     if not math.isfinite(nrmse):
         return "diverged"
     if nrmse <= target:
         return "target"
-    if k_target == k_cap or schedule_exhausted:
+    if k_target == k_cap:
         return "cap"
     if k_limit is not None and k_target == k_limit:
         return "compression"
-    return None
+    return "cap" if schedule_exhausted else None
 
 
 def prune(params: torch.Tensor, active: torch.Tensor, peak_rate: np.ndarray,

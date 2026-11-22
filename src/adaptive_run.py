@@ -52,6 +52,7 @@ LOG_FILE = "adaptive_run.log"
 OOM_ERRORS: tuple[type[BaseException], ...] = tuple(
     t for t in (getattr(torch.cuda, "OutOfMemoryError", None),) if t is not None)
 log = logging.getLogger(__name__)
+ADAPTIVE_FIT_LOGGER = "adaptive_fit"
 
 
 def _finite(text: str) -> float:
@@ -268,7 +269,16 @@ def drop_stale_rows(out: Path, name: str, done: set[int]) -> None:
 def warm_up(cell: dict, lut5: torch.Tensor | None) -> None:
     """Ajustement jetable (1 cellule, 1 iteration, K=1) pour exclure l'initialisation paresseuse du chronometrage."""
     cfg = AdaptiveConfig(arm=ARM, k_cap=1, compression_frac=None, iters_override=1)
-    fit_adaptive([cell], cfg, lut5)
+    fit_logger = logging.getLogger(ADAPTIVE_FIT_LOGGER)
+    previous_level = fit_logger.level
+    fit_logger.setLevel(logging.WARNING)  # l'arret "cap a K=1" du jetable ressemblerait a un vrai resultat
+    t0 = time.perf_counter()
+    try:
+        fit_adaptive([cell], cfg, lut5)
+    finally:
+        fit_logger.setLevel(previous_level)
+    log.info("echauffement GPU (classe %s, cellule %s) : %.1f s \u2014 resultat ignore", cell.get("bin"), cell["id"],
+             time.perf_counter() - t0)
 
 
 def _next_run_number(out: Path) -> int:

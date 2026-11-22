@@ -85,6 +85,18 @@ def test_stop_reason_priority(args, expected):
     assert af.stop_reason(target=0.1, **args) == expected
 
 
+@pytest.mark.unit
+@pytest.mark.parametrize("k_target,k_cap,k_limit,exhausted,expected", [
+    (13, 16, 13, True, "compression"),
+    (16, 16, 16, True, "cap"),
+    (12, 16, None, True, "cap"),
+    (13, 16, 20, True, "cap"),
+    (13, 16, 13, False, "compression"),
+])
+def test_stop_reason_compression_before_schedule_end(k_target, k_cap, k_limit, exhausted, expected):
+    assert af.stop_reason(0.5, k_target, k_cap, k_limit, exhausted, 0.1) == expected
+
+
 # ------------------------------------------------------------------ elagage / retassage
 @pytest.mark.unit
 def test_prune_removes_weak_sources_and_counts():
@@ -317,3 +329,12 @@ def test_fit_with_limit_not_in_schedule_hits_limit_once(make_cell, lut5, monkeyp
     seq = [t["k_target"] for t in trace]
     assert seq[-3:] == [24, 32, 35] and seq.count(35) == 1
     assert results[0]["stop_reason"] == "compression" and results[0]["k_target_last"] == 35
+
+
+@pytest.mark.unit
+def test_fit_limit_binding_on_last_wave_is_compression(make_cell, lut5, monkeypatch):
+    monkeypatch.setattr(af, "compression_k_limit", lambda area, n_par, frac: 13)
+    cell = make_cell(0, size=40, blobs=((20.0, 20.0, 6.0, 12.0, 12.0),))
+    results, _, _ = af.fit_adaptive([cell], _cfg(k_cap=16, compression_frac=0.25, iters_override=1), lut5)
+    assert results[0]["stop_reason"] == "compression" and results[0]["k_target_last"] == 13
+

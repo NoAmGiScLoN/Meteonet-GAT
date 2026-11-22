@@ -427,3 +427,28 @@ def test_warm_up_once_per_bin(tmp_path, make_cell, monkeypatch):
     monkeypatch.setattr(ar, "warm_up", lambda c, lut: warm.append(c["id"]) or real(c, lut))
     ar.main(base_args(tmp_path, path))
     assert warm == [0, 1]
+
+
+@pytest.mark.unit
+def test_warm_up_is_silent_labelled_and_restores_logger(make_cell, synthetic_lut, caplog):
+    fit_logger = logging.getLogger("adaptive_fit")
+    before = fit_logger.level
+    with caplog.at_level(logging.INFO):
+        ar.warm_up(make_cell(7, size=20), synthetic_lut[:1][None, None])
+    messages = [r.getMessage() for r in caplog.records]
+    assert not any("arret" in m for m in messages)
+    assert any("echauffement GPU" in m and "cellule 7" in m and "resultat ignore" in m for m in messages)
+    assert fit_logger.level == before
+
+
+@pytest.mark.integration
+def test_warm_up_results_never_written(tmp_path, make_cell):
+    cells = [make_cell(0, size=20)]
+    path = tmp_path / "s.pkl"
+    path.write_bytes(pickle.dumps(cells))
+    ar.main(base_args(tmp_path, path))
+    out = tmp_path / OUT_NAME
+    for f in out.glob("cells_*.csv"):
+        assert list(pd.read_csv(f).id) == [0]
+    for f in out.glob("waves_*.csv"):
+        assert set(pd.read_csv(f).id) <= {0}
