@@ -66,7 +66,8 @@ def crop_cell(R, labels, lid, sl, area, tag, date):
     y0, y1 = max(sl[0].start - MARGIN, 0), min(sl[0].stop + MARGIN, R.shape[0])
     x0, x1 = max(sl[1].start - MARGIN, 0), min(sl[1].stop + MARGIN, R.shape[1])
     m = labels[y0:y1, x0:x1] == lid
-    rate = np.where(m, R[y0:y1, x0:x1] * 12 / 100, 0).astype(np.float32)
+    # int32 : R * 12 déborde int16 au-delà de 2730
+    rate = np.where(m, R[y0:y1, x0:x1].astype(np.int32) * 12 / 100, 0).astype(np.float32)
     ys, xs = np.nonzero(m)
     return dict(tag=tag, date=str(date), area=int(area), rate=rate, y0=y0, x0=x0,
                 cy=float(ys.mean() + y0), cx=float(xs.mean() + x0))
@@ -152,8 +153,15 @@ def params_by_cell(cells: list[dict], params: torch.Tensor, active: torch.Tensor
 
 
 # ------------------------------------------------------------------ rendu
+def _check_gate(active: torch.Tensor) -> None:
+    """Les portes doivent être dans [0, 1] (NaN rejeté) : un seul min/max sur (B, K)."""
+    if not bool(((active >= 0) & (active <= 1)).all()):
+        raise ValueError("active doit être dans [0, 1] (NaN et infinis exclus)")
+
+
 def render(params, active, Xc, Yc, kind, lut5=None):
-    """params (B,K,P), active (B,K), Xc/Yc (B,H,W) -> champ de taux (B,H,W) en mm/h."""
+    """params (B,K,P), active (B,K) porte dans [0, 1] (amplitude multipliée), Xc/Yc (B,H,W) -> champ de taux (B,H,W) en mm/h."""
+    _check_gate(active)
     B, K, _ = params.shape
     mx, my = params[..., 0, None, None], params[..., 1, None, None]
     amp = F.softplus(params[..., 2]) * active
@@ -183,10 +191,14 @@ HALF_SIZES = [4, 8, 16, 32, 64, 128, 256, 512]
 def render_windowed(params, active, H, W, kind, lut5=None):
     """Même résultat que `render`, mais chaque source n'est évaluée que dans une fenêtre autour d'elle
     (profil nul au-delà de L_LUT rayons pour la diffusion, < 0.2 % au-delà de 3.5 rayons pour la gaussienne),
-    puis ajoutée sur la grille (B, H, W). Fenêtres regroupées par taille."""
+    puis ajoutée sur la grille (B, H, W). Fenêtres regroupées par taille.
+    active (B, K) dans [0, 1] met la source à l'échelle ; les sources à 0 sont sautées, donc d/d(active) vaut
+    exactement 0 en active == 0 : l'encodeur doit garder un plancher positif sur les portes à apprendre."""
+    _check_gate(active)
     B, K, P = params.shape
     bidx, kidx = torch.nonzero(active > 0, as_tuple=True)
     p = params[bidx, kidx]  # (N, P)
+    gate = active[bidx, kidx].to(params.dtype)  # (N,) porte fractionnaire dans ]0, 1]
     ra = 0.5 + F.softplus(p[:, 3])
     rb = 0.5 + F.softplus(p[:, 4])
     reach = (L_LUT if kind == "diffusion" else 3.5) * torch.maximum(ra, rb).detach()
@@ -216,7 +228,7 @@ def render_windowed(params, active, H, W, kind, lut5=None):
             n_, S = r.shape[0], r.shape[1]
             grid = torch.stack([gx, gy, gz], -1).reshape(1, n_, S * S, 1, 3)
             prof = F.grid_sample(lut5, grid, align_corners=True, padding_mode="zeros").reshape(n_, S, S)
-        vals = F.softplus(q[:, 2, None, None]) * prof
+        vals = F.softplus(q[:, 2, None, None]) * gate[sel, None, None] * prof
         inb = (X >= 0) & (X < W) & (Y >= 0) & (Y < H)
         flat = bidx[sel, None, None] * (H * W) + Y.clamp(0, H - 1).long() * W + X.clamp(0, W - 1).long()
         canvas = canvas.index_add(0, flat[inb], vals[inb])
