@@ -77,14 +77,46 @@ def test_every_adaptive_run_call_names_its_sample() -> None:
     # Act
     missing = [ln for ln in calls if "--sample" not in ln]
     # Assert
-    assert len(calls) == 4 and missing == []
+    assert len(calls) == 6 and missing == []
+
+
+LONG_STAGES = ("1_adaptive_2016", "3_floor256", "2_adaptive_2017", "5_adaptive_2016_c050", "6_adaptive_2017_c050")
+C050_STAGES = {"5_adaptive_2016_c050": ("sample_40.pkl", "adaptive_2016_c050"),
+               "6_adaptive_2017_c050": ("sample_40_2017.pkl", "adaptive_2017_c050")}
+
+
+def calls_by_stage() -> dict[str, str]:
+    return {ln.split()[1]: ln for ln in adaptive_run_lines()}
 
 
 @pytest.mark.integration
 def test_long_stages_are_resumable_and_smoke_is_not() -> None:
     # Arrange
-    calls = {ln.split()[1]: ln for ln in adaptive_run_lines()}
+    calls = calls_by_stage()
     # Act / Assert
-    for name in ("1_adaptive_2016", "3_floor256", "2_adaptive_2017"):
+    for name in LONG_STAGES:
         assert "--resume" in calls[name], name
     assert "--resume" not in calls["0_smoke"]
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("name", list(C050_STAGES))
+def test_c050_rerun_uses_half_compression_and_skips_largest_class(name: str) -> None:
+    # Arrange : D23 — compression 0.5 ; >=5000 px inchangé (la limite >= 178 > cap 128 ne lie jamais)
+    sample, out = C050_STAGES[name]
+    line = calls_by_stage()[name]
+    # Act
+    bins = line.split("--bins", 1)[1].split("--", 1)[0].split()
+    # Assert
+    assert "--compression-frac 0.5" in line and "--k-cap 128" in line
+    assert f"$SRC/{sample}" in line and f"$OUT/{out}" in line
+    assert bins == ["50-200", "200-1000", "1000-5000"]
+    assert "--target" not in line  # cible D21 (0.1) par défaut
+
+
+@pytest.mark.integration
+def test_stage_dispatch_and_summary_cover_c050_runs() -> None:
+    text = script_text()
+    assert "5) stage_5 ;;" in text and "6) stage_6 ;;" in text
+    summary_loops = re.findall(r"for (?:d|run) in [^;:\n]*", text)
+    assert summary_loops and all("adaptive_2016_c050" in s and "adaptive_2017_c050" in s for s in summary_loops)
