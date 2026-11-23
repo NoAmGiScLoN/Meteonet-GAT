@@ -100,6 +100,9 @@ class Track:
     age: int                 # cartes observées
     coasted: int             # cartes consécutives manquées
     truncated: bool
+    gap_steps: int = 0       # pas depuis la dernière observation
+    border_flag: bool = False   # dernière observation au contact du bord de la grille
+    missing_flag: bool = False  # dernière observation au contact de pixels manquants
 
     def __post_init__(self) -> None:
         ys, xs = _pixels(self.ys, "ys"), _pixels(self.xs, "xs")
@@ -112,6 +115,11 @@ class Track:
             raise ValueError(f"age doit être un entier >= 0 (reçu {self.age!r})")
         if not _is_int(self.coasted) or self.coasted < 0:
             raise ValueError(f"coasted doit être un entier >= 0 (reçu {self.coasted!r})")
+        if not _is_int(self.gap_steps) or self.gap_steps < 0:
+            raise ValueError(f"gap_steps doit être un entier >= 0 (reçu {self.gap_steps!r})")
+        for name in ("border_flag", "missing_flag", "truncated"):
+            if not isinstance(getattr(self, name), (bool, np.bool_)):
+                raise ValueError(f"{name} doit être un booléen (reçu {getattr(self, name)!r})")
         if len(self.v) != 2 or not all(math.isfinite(c) for c in self.v):
             raise ValueError(f"v doit être (vy, vx) fini (reçu {self.v!r})")
         if not (math.isfinite(self.cy) and math.isfinite(self.cx)):
