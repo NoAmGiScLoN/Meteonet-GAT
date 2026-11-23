@@ -12,7 +12,10 @@ import matplotlib
 import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
+from matplotlib.colors import ListedColormap, LogNorm
 from matplotlib.figure import Figure  # API objet : aucun backend global imposé
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch, Rectangle
 from scipy import ndimage as ndi
 
 from cell_delimitation import MISSING, segment
@@ -26,12 +29,13 @@ PER_ROW = 2                 # événements par ligne de la planche
 CROP_PX = 64                # côté de la vignette centrée sur la piste
 STEP = timedelta(minutes=5)
 RATE_FACTOR = 12 / 100      # brut MeteoNet -> mm/h
-RATE_MAX = 20.0             # saturation de l'échelle de couleur (mm/h)
+RATE_MIN, RATE_MAX = 1.0, 60.0   # échelle logarithmique de couleur (mm/h)
+ABSENT_EVENTS = ("death", "exit_edge", "exit_missing", "merge_end", "gap_break", "coast")
+MAX_BACK = 12               # au-delà (cartes), la dernière observation n'est plus cherchée
+MISSING_GREY = "0.78"
 HIGHLIGHT = (1.0, 0.0, 0.0, 1.0)
 OTHERS_UNTRACKED = (0.5, 0.5, 0.5, 1.0)
 CSV_COLUMNS = ["event", "t", "track_id", "area", "page", "ok"]
-KEY = ["event", "t", "track_id"]
-LOOKBACK = 3                # cartes avant t lues dans les détections (centre d'une piste morte)
 
 
 @dataclass(frozen=True)
@@ -106,58 +110,136 @@ def _crop(centre: tuple[float, float] | None, shape: tuple[int, int]) -> tuple[s
     return spans[0], spans[1]
 
 
-def _read_window(t: datetime, data_dir: Path) -> dict[datetime, Frame]:
+def anchor_time(detections: pd.DataFrame, track_id: int, t: datetime) -> datetime | None:
+    """Dernière détection de la piste avant t (None si absente ou à plus de MAX_BACK cartes)."""
+    times = detections.timestamp[(detections.track_id == track_id) & (detections.timestamp < t)]
+    if times.empty:
+        return None
+    last = times.max().to_pydatetime()
+    return last if t - last <= MAX_BACK * STEP else None
+
+
+def panel_times(kind: str, t: datetime, anchor: datetime | None
+                ) -> tuple[datetime, datetime, datetime]:
+    """Instants des 3 panneaux. Piste absente à t par définition (fin, coast) : le panneau de
+    gauche est sa dernière détection (anchor), sinon t - 1 pas."""
+    left = anchor if kind in ABSENT_EVENTS and anchor is not None else t - STEP
+    return left, t, t + STEP
+
+
+def predicted_position(last: pd.Series, steps: int) -> tuple[float, float]:
+    """Position à t : dernier centroïde + vitesse x pas écoulés depuis la dernière obs."""
+    return float(last.cy + steps * last.v_y), float(last.cx + steps * last.v_x)
+
+
+def panel_overlay(frame: Frame, dets: pd.DataFrame, track_id: int) -> np.ndarray:
+    """Contours RGBA d'une carte, d'après les seules détections de SON instant (frame.t)."""
+    labels, _, _ = segment(frame.R)
+    here = dets[dets.timestamp == frame.t]
+    if labels.max() == 0 or not len(here):
+        return np.zeros(frame.R.shape + (4,))
+    return overlay(labels, here, track_id)
+
+
+def _read_frames(times: Sequence[datetime], data_dir: Path) -> dict[datetime, Frame]:
+    wanted = set(times)
     try:
-        return {f.t: f for f in iter_frames(t - STEP, t + STEP, data_dir)}
+        return {f.t: f for f in iter_frames(min(wanted), max(wanted), data_dir)
+                if f.t in wanted}
     except (FileNotFoundError, NoFramesError, ValueError) as exc:
-        logger.warning("%s : cartes illisibles (%s)", t, exc)
+        logger.warning("%s : cartes illisibles (%s)", min(wanted), exc)
         return {}
 
 
-def _centre(dets: pd.DataFrame, track_id: int, t: datetime) -> tuple[float, float] | None:
-    mine = dets[dets.track_id == track_id]
-    if not len(mine):
-        return None
-    row = mine.iloc[(mine.timestamp - t).abs().argmin()]
-    return float(row.cy), float(row.cx)
+def _draw_field(ax: Axes, frame: Frame, ys: slice, xs: slice) -> None:
+    """Taux de pluie (mm/h, échelle log), données manquantes grises hachurées, bord de grille."""
+    cmap = matplotlib.colormaps["turbo"].with_extremes(bad="white")
+    rate = frame.R * RATE_FACTOR
+    rate = np.where((frame.R == MISSING) | (rate < RATE_MIN), np.nan, rate)
+    ax.imshow(rate[ys, xs], cmap=cmap, norm=LogNorm(RATE_MIN, RATE_MAX), interpolation="nearest")
+    miss = (frame.R == MISSING)[ys, xs]
+    if miss.any():
+        ax.imshow(np.where(miss, 1.0, np.nan), cmap=ListedColormap([MISSING_GREY]), vmin=0,
+                  vmax=1, interpolation="nearest")
+        with matplotlib.rc_context({"hatch.color": "0.35", "hatch.linewidth": 0.4}):
+            ax.contourf(miss.astype(float), levels=[0.5, 1.5], colors="none",
+                        hatches=["////"])
+    h, w = frame.R.shape
+    ax.add_patch(Rectangle((-0.5 - xs.start, -0.5 - ys.start), w, h, fill=False, ec="k", lw=1.5))
+    ax.set_xlim(-0.5, xs.stop - xs.start - 0.5)
+    ax.set_ylim(ys.stop - ys.start - 0.5, -0.5)
 
 
-def _draw_panel(ax: Axes, frame: Frame | None, dets: pd.DataFrame, ev: pd.Series,
-                centre: tuple[float, float] | None, title: str) -> None:
+def _draw_panel(ax: Axes, frame: Frame | None, dets: pd.DataFrame, track_id: int,
+                centre: tuple[float, float] | None, title: str,
+                cross: tuple[float, float] | None = None) -> None:
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_title(title, fontsize=7)
     if frame is None:
         ax.text(0.5, 0.5, "pas de carte", ha="center", va="center", fontsize=7)
         return
-    rate = np.where(frame.R == MISSING, np.nan, frame.R * RATE_FACTOR)
-    ys, xs = _crop(centre, rate.shape)
-    ax.imshow(rate[ys, xs], cmap="Blues", vmin=0, vmax=RATE_MAX)
-    labels, _, _ = segment(frame.R)
-    here = dets[dets.timestamp == frame.t]
-    if labels.max() > 0 and len(here):
-        ax.imshow(overlay(labels, here, int(ev.track_id))[ys, xs])
+    ys, xs = _crop(centre, frame.R.shape)
+    _draw_field(ax, frame, ys, xs)
+    ax.imshow(panel_overlay(frame, dets, track_id)[ys, xs], interpolation="nearest")
+    if cross is not None:
+        ax.plot(cross[1] - xs.start, cross[0] - ys.start, "x", color="red", ms=9, mew=1.5)
+        ax.set_xlim(-0.5, xs.stop - xs.start - 0.5)
+        ax.set_ylim(ys.stop - ys.start - 0.5, -0.5)
+
+
+def _legend(fig: Figure) -> None:
+    handles = [Line2D([], [], color=HIGHLIGHT[:3], lw=2, label="piste de l'événement"),
+               Line2D([], [], color=matplotlib.colormaps["tab20"](2), lw=2,
+                      label="autres pistes (couleurs)"),
+               Line2D([], [], color=OTHERS_UNTRACKED[:3], lw=2, label="non suivie (gris)"),
+               Patch(facecolor=MISSING_GREY, hatch="////", edgecolor="0.35",
+                     label="donnée manquante"),
+               Line2D([], [], color="k", lw=1.5, label="bord de la grille"),
+               Line2D([], [], color="red", marker="x", ls="", label="position prédite à t")]
+    fig.legend(handles=handles, loc="lower center", ncol=6, fontsize=7, frameon=False)
+
+
+def _draw_event(axes_row: Sequence[Axes], ev: pd.Series, number: int, dets: pd.DataFrame,
+                data_dir: Path) -> None:
+    tid = int(ev.track_id)
+    anchor = ev.anchor.to_pydatetime() if pd.notna(ev.anchor) else None
+    left, mid, right = panel_times(ev.event, ev.t, anchor)
+    frames = _read_frames([left, mid, right], data_dir)
+    last = cross = None
+    if anchor is not None and ev.event in ABSENT_EVENTS:
+        rows = dets[(dets.track_id == tid) & (dets.timestamp == left)]
+        if len(rows):
+            last = rows.iloc[0]
+            steps = int(round((mid - left) / STEP))
+            cross = predicted_position(last, steps)
+    centre = (float(last.cy), float(last.cx)) if last is not None else None
+    if centre is None:
+        here = dets[(dets.track_id == tid)]
+        if len(here):
+            row = here.iloc[(here.timestamp - mid).abs().argmin()]
+            centre = (float(row.cy), float(row.cx))
+    steps_back = int(round((mid - left) / STEP))
+    titles = (f"t-{steps_back}" + (" (dern. obs.)" if last is not None else ""),
+              f"#{number} {ev.event} tr={tid} A={ev.area}\n{ev.t:%m-%d %H:%M}", "t+1")
+    for ax, t, title, x in zip(axes_row, (left, mid, right), titles, (None, cross, None)):
+        ax.axis("on")
+        _draw_panel(ax, frames.get(t), dets, tid, centre, title, x)
 
 
 def _draw_page(rows: pd.DataFrame, offset: int, dets: pd.DataFrame, data_dir: Path,
                path: Path) -> None:
     n_rows = -(-len(rows) // PER_ROW)
-    fig = Figure(figsize=(3 * 3 * PER_ROW * 0.8, 2.6 * n_rows))
+    fig = Figure(figsize=(3 * 3 * PER_ROW * 0.8, 2.6 * n_rows + 0.5))
     axes = fig.subplots(n_rows, 3 * PER_ROW, squeeze=False)
     for ax in axes.ravel():
         ax.axis("off")
     for k, ev in enumerate(rows.itertuples(index=False)):
-        ev = pd.Series(ev._asdict())
-        frames = _read_window(ev.t, data_dir)
-        centre = _centre(dets, int(ev.track_id), ev.t)
         r, c = divmod(k, PER_ROW)
-        for j, shift in enumerate((-1, 0, 1)):
-            ax = axes[r, 3 * c + j]
-            ax.axis("on")
-            name = f"t{shift:+d}" if shift else (f"#{offset + k + 1} {ev.event} tr={ev.track_id}"
-                                                 f" A={ev.area}\n{ev.t:%m-%d %H:%M}")
-            _draw_panel(ax, frames.get(ev.t + shift * STEP), dets, ev, centre, name)
-    fig.tight_layout()
+        _draw_event(axes[r, 3 * c:3 * c + 3], pd.Series(ev._asdict()), offset + k + 1, dets,
+                    data_dir)
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    _legend(fig)
     fig.savefig(path, dpi=70)
 
 
@@ -190,7 +272,11 @@ def write_review(events: pd.DataFrame, detections: pd.DataFrame, data_dir: Path,
     png_path = Path(png_path)
     png_path.parent.mkdir(parents=True, exist_ok=True)
     picked = sample_events(events, n, seed)
-    needed = {t + s * STEP for t in picked.t for s in range(-LOOKBACK, 2)}
+    mine = detections[detections.track_id.isin(picked.track_id)]
+    picked = picked.assign(anchor=[
+        anchor_time(mine, int(r.track_id), r.t) if r.event in ABSENT_EVENTS else None
+        for r in picked.itertuples()]).astype({"anchor": "datetime64[ns]"})
+    needed = {t + s * STEP for t in picked.t for s in (-1, 0, 1)} | set(picked.anchor.dropna())
     dets = detections[detections.timestamp.isin(needed)]
     sample = []
     for p, start in enumerate(range(0, len(picked), EVENTS_PER_PAGE), start=1):
