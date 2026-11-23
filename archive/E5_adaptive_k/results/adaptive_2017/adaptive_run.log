@@ -1,0 +1,205 @@
+2026-11-22 23:00:04,849 INFO log-w table loaded: results/07_sessionB/adaptive_2017/diffusion_profiles_logw_ace17c5890.pt (key ace17c5890)
+2026-11-22 23:00:04,971 INFO classe 50-200 : 40 cellules a ajuster (0 deja faites)
+2026-11-22 23:00:09,252 INFO echauffement GPU (classe 50-200, cellule 0) : 4.3 s — resultat ignore
+2026-11-22 23:00:20,487 INFO cellule 3 : arret compression a K=1 (nrmse 0.442)
+2026-11-22 23:00:20,520 INFO cellule 20 : arret compression a K=1 (nrmse 0.378)
+2026-11-22 23:00:20,539 INFO cellule 32 : arret compression a K=1 (nrmse 0.687)
+2026-11-22 23:00:20,558 INFO cellule 34 : arret compression a K=1 (nrmse 0.354)
+2026-11-22 23:00:35,451 INFO cellule 0 : arret compression a K=2 (nrmse 0.314)
+2026-11-22 23:00:35,490 INFO cellule 4 : arret compression a K=2 (nrmse 0.200)
+2026-11-22 23:00:35,515 INFO cellule 7 : arret compression a K=2 (nrmse 0.524)
+2026-11-22 23:00:35,537 INFO cellule 8 : arret compression a K=2 (nrmse 0.200)
+2026-11-22 23:00:35,556 INFO cellule 9 : arret compression a K=2 (nrmse 0.291)
+2026-11-22 23:00:35,578 INFO cellule 11 : arret compression a K=2 (nrmse 0.328)
+2026-11-22 23:00:35,596 INFO cellule 16 : arret compression a K=2 (nrmse 0.273)
+2026-11-22 23:00:35,614 INFO cellule 17 : arret compression a K=2 (nrmse 0.278)
+2026-11-22 23:00:35,638 INFO cellule 18 : arret compression a K=2 (nrmse 0.375)
+2026-11-22 23:00:35,661 INFO cellule 19 : arret compression a K=2 (nrmse 0.138)
+2026-11-22 23:00:35,682 INFO cellule 22 : arret compression a K=2 (nrmse 0.239)
+2026-11-22 23:00:35,705 INFO cellule 25 : arret compression a K=2 (nrmse 0.331)
+2026-11-22 23:00:35,727 INFO cellule 28 : arret compression a K=2 (nrmse 0.476)
+2026-11-22 23:00:35,750 INFO cellule 31 : arret compression a K=2 (nrmse 0.529)
+2026-11-22 23:00:35,779 INFO cellule 33 : arret compression a K=2 (nrmse 0.309)
+2026-11-22 23:00:35,809 INFO cellule 37 : arret compression a K=2 (nrmse 0.268)
+2026-11-22 23:00:35,832 INFO cellule 39 : arret compression a K=2 (nrmse 0.288)
+2026-11-22 23:00:50,647 INFO cellule 1 : arret compression a K=3 (nrmse 0.170)
+2026-11-22 23:00:50,693 INFO cellule 14 : arret compression a K=3 (nrmse 0.392)
+2026-11-22 23:00:50,726 INFO cellule 21 : arret compression a K=3 (nrmse 0.482)
+2026-11-22 23:00:50,758 INFO cellule 23 : arret compression a K=3 (nrmse 0.376)
+2026-11-22 23:00:50,788 INFO cellule 24 : arret compression a K=3 (nrmse 0.283)
+2026-11-22 23:00:50,814 INFO cellule 27 : arret compression a K=3 (nrmse 0.222)
+2026-11-22 23:00:50,846 INFO cellule 29 : arret compression a K=3 (nrmse 0.230)
+2026-11-22 23:00:50,872 INFO cellule 38 : arret compression a K=3 (nrmse 0.373)
+2026-11-22 23:01:05,679 INFO cellule 2 : arret compression a K=4 (nrmse 0.211)
+2026-11-22 23:01:05,722 INFO cellule 6 : arret compression a K=4 (nrmse 0.211)
+2026-11-22 23:01:05,749 INFO cellule 12 : arret compression a K=4 (nrmse 0.226)
+2026-11-22 23:01:05,772 INFO cellule 13 : arret compression a K=4 (nrmse 0.200)
+2026-11-22 23:01:05,793 INFO cellule 15 : arret compression a K=4 (nrmse 0.235)
+2026-11-22 23:01:05,812 INFO cellule 35 : arret compression a K=4 (nrmse 0.277)
+2026-11-22 23:01:21,247 INFO cellule 5 : arret compression a K=6 (nrmse 0.194)
+2026-11-22 23:01:21,280 INFO cellule 10 : arret compression a K=5 (nrmse 0.234)
+2026-11-22 23:01:21,313 INFO cellule 26 : arret compression a K=5 (nrmse 0.296)
+2026-11-22 23:01:21,345 INFO cellule 30 : arret compression a K=5 (nrmse 0.224)
+2026-11-22 23:01:21,366 INFO cellule 36 : arret compression a K=4 (nrmse 0.265)
+2026-11-22 23:01:21,420 INFO classe 50-200 groupe 0 : 40 cellules, 72.1 s, 14.21 s/vague, pic 7561728 o
+2026-11-22 23:01:21,421 INFO classe 200-1000 : 40 cellules a ajuster (0 deja faites)
+2026-11-22 23:01:21,493 INFO echauffement GPU (classe 200-1000, cellule 40) : 0.1 s — resultat ignore
+2026-11-22 23:05:03,495 INFO cellule 43 : arret compression a K=8 (nrmse 0.212)
+2026-11-22 23:05:03,523 INFO cellule 44 : arret compression a K=8 (nrmse 0.136)
+2026-11-22 23:05:03,544 INFO cellule 45 : arret compression a K=7 (nrmse 0.235)
+2026-11-22 23:05:03,564 INFO cellule 47 : arret compression a K=8 (nrmse 0.210)
+2026-11-22 23:05:03,587 INFO cellule 51 : arret compression a K=7 (nrmse 0.147)
+2026-11-22 23:05:03,608 INFO cellule 53 : arret compression a K=8 (nrmse 0.219)
+2026-11-22 23:05:03,625 INFO cellule 57 : arret compression a K=8 (nrmse 0.172)
+2026-11-22 23:05:40,958 INFO cellule 41 : arret compression a K=12 (nrmse 0.207)
+2026-11-22 23:05:40,993 INFO cellule 50 : arret compression a K=9 (nrmse 0.215)
+2026-11-22 23:05:41,014 INFO cellule 52 : arret compression a K=12 (nrmse 0.263)
+2026-11-22 23:05:41,033 INFO cellule 54 : arret compression a K=10 (nrmse 0.166)
+2026-11-22 23:06:17,992 INFO cellule 48 : arret compression a K=15 (nrmse 0.129)
+2026-11-22 23:06:18,026 INFO cellule 49 : arret compression a K=13 (nrmse 0.135)
+2026-11-22 23:06:18,047 INFO cellule 55 : arret target a K=16 (nrmse 0.071)
+2026-11-22 23:07:03,583 INFO cellule 40 : arret compression a K=24 (nrmse 0.149)
+2026-11-22 23:07:03,626 INFO cellule 42 : arret compression a K=17 (nrmse 0.168)
+2026-11-22 23:07:03,658 INFO cellule 46 : arret compression a K=19 (nrmse 0.140)
+2026-11-22 23:07:03,684 INFO cellule 56 : arret compression a K=20 (nrmse 0.255)
+2026-11-22 23:07:03,710 INFO cellule 59 : arret compression a K=18 (nrmse 0.261)
+2026-11-22 23:08:12,014 INFO cellule 58 : arret compression a K=33 (nrmse 0.113)
+2026-11-22 23:08:12,078 INFO classe 200-1000 groupe 0 : 20 cellules, 410.5 s, 37.27 s/vague, pic 23052800 o
+2026-11-22 23:11:39,992 INFO cellule 64 : arret compression a K=7 (nrmse 0.160)
+2026-11-22 23:11:40,021 INFO cellule 71 : arret compression a K=8 (nrmse 0.150)
+2026-11-22 23:11:40,041 INFO cellule 73 : arret compression a K=8 (nrmse 0.197)
+2026-11-22 23:12:19,667 INFO cellule 61 : arret compression a K=9 (nrmse 0.219)
+2026-11-22 23:12:19,701 INFO cellule 69 : arret compression a K=11 (nrmse 0.199)
+2026-11-22 23:12:19,725 INFO cellule 70 : arret compression a K=12 (nrmse 0.191)
+2026-11-22 23:12:19,744 INFO cellule 74 : arret compression a K=9 (nrmse 0.122)
+2026-11-22 23:12:19,764 INFO cellule 76 : arret compression a K=12 (nrmse 0.239)
+2026-11-22 23:12:19,788 INFO cellule 79 : arret compression a K=11 (nrmse 0.183)
+2026-11-22 23:13:04,722 INFO cellule 60 : arret compression a K=14 (nrmse 0.230)
+2026-11-22 23:13:04,766 INFO cellule 66 : arret compression a K=15 (nrmse 0.217)
+2026-11-22 23:13:04,792 INFO cellule 68 : arret compression a K=16 (nrmse 0.173)
+2026-11-22 23:13:04,815 INFO cellule 75 : arret compression a K=15 (nrmse 0.118)
+2026-11-22 23:13:50,831 INFO cellule 63 : arret compression a K=18 (nrmse 0.159)
+2026-11-22 23:13:50,879 INFO cellule 72 : arret compression a K=20 (nrmse 0.215)
+2026-11-22 23:13:50,916 INFO cellule 77 : arret compression a K=18 (nrmse 0.124)
+2026-11-22 23:14:33,499 INFO cellule 62 : arret compression a K=26 (nrmse 0.223)
+2026-11-22 23:14:33,543 INFO cellule 65 : arret compression a K=25 (nrmse 0.146)
+2026-11-22 23:14:33,578 INFO cellule 78 : arret compression a K=25 (nrmse 0.146)
+2026-11-22 23:15:04,728 INFO cellule 67 : arret target a K=35 (nrmse 0.099)
+2026-11-22 23:15:04,820 INFO classe 200-1000 groupe 1 : 20 cellules, 412.7 s, 37.46 s/vague, pic 21974016 o
+2026-11-22 23:15:04,821 INFO classe 1000-5000 : 40 cellules a ajuster (0 deja faites)
+2026-11-22 23:15:04,893 INFO echauffement GPU (classe 1000-5000, cellule 80) : 0.1 s — resultat ignore
+2026-11-22 23:22:33,051 INFO cellule 80 : arret compression a K=45 (nrmse 0.131)
+2026-11-22 23:22:33,084 INFO cellule 82 : arret compression a K=36 (nrmse 0.135)
+2026-11-22 23:22:33,110 INFO cellule 83 : arret compression a K=43 (nrmse 0.185)
+2026-11-22 23:22:33,131 INFO cellule 85 : arret compression a K=48 (nrmse 0.153)
+2026-11-22 23:22:33,150 INFO cellule 89 : arret target a K=37 (nrmse 0.098)
+2026-11-22 23:23:17,853 INFO cellule 86 : arret target a K=61 (nrmse 0.092)
+2026-11-22 23:23:17,884 INFO cellule 87 : arret compression a K=53 (nrmse 0.110)
+2026-11-22 23:24:00,456 INFO cellule 81 : arret compression a K=68 (nrmse 0.163)
+2026-11-22 23:24:42,625 INFO cellule 84 : arret compression a K=110 (nrmse 0.160)
+2026-11-22 23:24:42,655 INFO cellule 88 : arret cap a K=126 (nrmse 0.101)
+2026-11-22 23:24:42,727 INFO classe 1000-5000 groupe 0 : 10 cellules, 577.8 s, 41.25 s/vague, pic 58253824 o
+2026-11-22 23:31:40,192 INFO cellule 90 : arret compression a K=37 (nrmse 0.105)
+2026-11-22 23:31:40,219 INFO cellule 92 : arret compression a K=38 (nrmse 0.170)
+2026-11-22 23:31:40,243 INFO cellule 93 : arret compression a K=35 (nrmse 0.100)
+2026-11-22 23:31:40,265 INFO cellule 95 : arret compression a K=39 (nrmse 0.139)
+2026-11-22 23:31:40,295 INFO cellule 96 : arret compression a K=37 (nrmse 0.149)
+2026-11-22 23:32:18,798 INFO cellule 91 : arret compression a K=53 (nrmse 0.152)
+2026-11-22 23:32:57,638 INFO cellule 98 : arret compression a K=78 (nrmse 0.165)
+2026-11-22 23:32:57,665 INFO cellule 99 : arret compression a K=85 (nrmse 0.119)
+2026-11-22 23:33:35,838 INFO cellule 94 : arret compression a K=104 (nrmse 0.123)
+2026-11-22 23:33:35,876 INFO cellule 97 : arret compression a K=106 (nrmse 0.136)
+2026-11-22 23:33:35,943 INFO classe 1000-5000 groupe 1 : 10 cellules, 533.2 s, 38.06 s/vague, pic 71529472 o
+2026-11-22 23:39:41,389 INFO cellule 108 : arret target a K=32 (nrmse 0.096)
+2026-11-22 23:40:20,071 INFO cellule 100 : arret compression a K=42 (nrmse 0.136)
+2026-11-22 23:40:20,101 INFO cellule 102 : arret compression a K=42 (nrmse 0.178)
+2026-11-22 23:40:20,127 INFO cellule 103 : arret compression a K=46 (nrmse 0.228)
+2026-11-22 23:40:20,154 INFO cellule 105 : arret compression a K=38 (nrmse 0.119)
+2026-11-22 23:40:57,413 INFO cellule 107 : arret compression a K=49 (nrmse 0.104)
+2026-11-22 23:41:35,207 INFO cellule 101 : arret compression a K=66 (nrmse 0.191)
+2026-11-22 23:41:35,236 INFO cellule 104 : arret compression a K=68 (nrmse 0.131)
+2026-11-22 23:41:35,261 INFO cellule 106 : arret compression a K=74 (nrmse 0.127)
+2026-11-22 23:42:20,972 INFO cellule 109 : arret cap a K=126 (nrmse 0.113)
+2026-11-22 23:42:21,056 INFO classe 1000-5000 groupe 2 : 10 cellules, 525.1 s, 37.48 s/vague, pic 50494976 o
+2026-11-22 23:48:25,666 INFO cellule 119 : arret target a K=32 (nrmse 0.089)
+2026-11-22 23:49:03,270 INFO cellule 110 : arret compression a K=40 (nrmse 0.129)
+2026-11-22 23:49:03,301 INFO cellule 111 : arret compression a K=43 (nrmse 0.134)
+2026-11-22 23:49:03,327 INFO cellule 112 : arret compression a K=46 (nrmse 0.244)
+2026-11-22 23:49:03,353 INFO cellule 117 : arret target a K=48 (nrmse 0.095)
+2026-11-22 23:49:03,409 INFO cellule 118 : arret compression a K=41 (nrmse 0.127)
+2026-11-22 23:49:37,543 INFO cellule 113 : arret target a K=64 (nrmse 0.076)
+2026-11-22 23:49:37,576 INFO cellule 115 : arret compression a K=55 (nrmse 0.169)
+2026-11-22 23:50:13,898 INFO cellule 116 : arret compression a K=79 (nrmse 0.240)
+2026-11-22 23:50:57,700 INFO cellule 114 : arret compression a K=124 (nrmse 0.115)
+2026-11-22 23:50:57,796 INFO classe 1000-5000 groupe 3 : 10 cellules, 516.7 s, 36.88 s/vague, pic 57508864 o
+2026-11-22 23:50:57,797 INFO classe >=5000 : 40 cellules a ajuster (0 deja faites)
+2026-11-22 23:50:57,884 INFO echauffement GPU (classe >=5000, cellule 120) : 0.1 s — resultat ignore
+2026-11-23 00:01:35,638 INFO cellule 120 : arret cap a K=128 (nrmse 0.136)
+2026-11-23 00:01:35,691 INFO cellule 121 : arret cap a K=128 (nrmse 0.210)
+2026-11-23 00:01:35,722 INFO cellule 122 : arret cap a K=126 (nrmse 0.134)
+2026-11-23 00:01:35,761 INFO cellule 123 : arret cap a K=128 (nrmse 0.145)
+2026-11-23 00:01:35,825 INFO classe >=5000 groupe 0 : 4 cellules, 637.9 s, 45.55 s/vague, pic 222515200 o
+2026-11-23 00:14:33,679 INFO cellule 124 : arret cap a K=120 (nrmse 0.124)
+2026-11-23 00:14:33,722 INFO cellule 125 : arret cap a K=119 (nrmse 0.137)
+2026-11-23 00:14:33,761 INFO cellule 126 : arret cap a K=128 (nrmse 0.159)
+2026-11-23 00:14:33,793 INFO cellule 127 : arret cap a K=128 (nrmse 0.134)
+2026-11-23 00:14:33,853 INFO classe >=5000 groupe 1 : 4 cellules, 778.0 s, 55.56 s/vague, pic 329827328 o
+2026-11-23 00:23:49,987 INFO cellule 128 : arret cap a K=128 (nrmse 0.109)
+2026-11-23 00:23:50,019 INFO cellule 129 : arret cap a K=128 (nrmse 0.120)
+2026-11-23 00:23:50,052 INFO cellule 130 : arret cap a K=128 (nrmse 0.288)
+2026-11-23 00:23:50,157 INFO cellule 131 : arret cap a K=127 (nrmse 0.105)
+2026-11-23 00:23:50,216 INFO classe >=5000 groupe 2 : 4 cellules, 556.3 s, 39.72 s/vague, pic 106307584 o
+2026-11-23 00:34:31,772 INFO cellule 135 : arret target a K=96 (nrmse 0.085)
+2026-11-23 00:35:36,195 INFO cellule 132 : arret target a K=128 (nrmse 0.099)
+2026-11-23 00:35:36,265 INFO cellule 133 : arret cap a K=126 (nrmse 0.177)
+2026-11-23 00:35:36,312 INFO cellule 134 : arret cap a K=128 (nrmse 0.138)
+2026-11-23 00:35:36,386 INFO classe >=5000 groupe 3 : 4 cellules, 706.1 s, 50.42 s/vague, pic 229709824 o
+2026-11-23 00:47:55,841 INFO cellule 136 : arret cap a K=127 (nrmse 0.121)
+2026-11-23 00:47:55,903 INFO cellule 137 : arret cap a K=117 (nrmse 0.135)
+2026-11-23 00:47:55,948 INFO cellule 138 : arret cap a K=125 (nrmse 0.171)
+2026-11-23 00:47:55,982 INFO cellule 139 : arret cap a K=127 (nrmse 0.189)
+2026-11-23 00:47:56,043 INFO classe >=5000 groupe 4 : 4 cellules, 739.6 s, 52.82 s/vague, pic 236535296 o
+2026-11-23 00:59:07,758 INFO cellule 140 : arret target a K=94 (nrmse 0.080)
+2026-11-23 01:00:11,974 INFO cellule 141 : arret cap a K=128 (nrmse 0.156)
+2026-11-23 01:00:12,007 INFO cellule 142 : arret target a K=127 (nrmse 0.099)
+2026-11-23 01:00:12,050 INFO cellule 143 : arret cap a K=126 (nrmse 0.132)
+2026-11-23 01:00:12,114 INFO classe >=5000 groupe 5 : 4 cellules, 736.0 s, 52.56 s/vague, pic 280516096 o
+2026-11-23 01:13:09,992 INFO cellule 144 : arret cap a K=128 (nrmse 0.117)
+2026-11-23 01:13:10,037 INFO cellule 145 : arret cap a K=128 (nrmse 0.146)
+2026-11-23 01:13:10,090 INFO cellule 146 : arret cap a K=127 (nrmse 0.168)
+2026-11-23 01:13:10,123 INFO cellule 147 : arret target a K=128 (nrmse 0.097)
+2026-11-23 01:13:10,185 INFO classe >=5000 groupe 6 : 4 cellules, 778.0 s, 55.56 s/vague, pic 368912384 o
+2026-11-23 01:23:59,706 INFO cellule 151 : arret target a K=88 (nrmse 0.088)
+2026-11-23 01:25:07,493 INFO cellule 148 : arret cap a K=123 (nrmse 0.160)
+2026-11-23 01:25:07,523 INFO cellule 149 : arret target a K=128 (nrmse 0.098)
+2026-11-23 01:25:07,545 INFO cellule 150 : arret cap a K=128 (nrmse 0.306)
+2026-11-23 01:25:07,605 INFO classe >=5000 groupe 7 : 4 cellules, 717.4 s, 51.23 s/vague, pic 307211776 o
+2026-11-23 01:40:25,668 INFO cellule 152 : arret cap a K=126 (nrmse 0.188)
+2026-11-23 01:40:25,742 INFO cellule 153 : arret cap a K=126 (nrmse 0.183)
+2026-11-23 01:40:25,771 INFO cellule 154 : arret target a K=127 (nrmse 0.094)
+2026-11-23 01:40:25,828 INFO cellule 155 : arret cap a K=126 (nrmse 0.137)
+2026-11-23 01:40:25,900 INFO classe >=5000 groupe 8 : 4 cellules, 918.2 s, 65.57 s/vague, pic 523710464 o
+2026-11-23 01:52:50,031 INFO cellule 156 : arret cap a K=127 (nrmse 0.233)
+2026-11-23 01:52:50,094 INFO cellule 157 : arret cap a K=126 (nrmse 0.143)
+2026-11-23 01:52:50,158 INFO cellule 158 : arret cap a K=128 (nrmse 0.202)
+2026-11-23 01:52:50,187 INFO cellule 159 : arret cap a K=127 (nrmse 0.139)
+2026-11-23 01:52:50,253 INFO classe >=5000 groupe 9 : 4 cellules, 744.3 s, 53.15 s/vague, pic 270027776 o
+2026-11-23 01:52:50,396 INFO synthese stop
+      bin  n  share_target  share_cap  share_compression  share_diverged
+1000-5000 40          0.15       0.05               0.80             0.0
+ 200-1000 40          0.05       0.00               0.95             0.0
+   50-200 40          0.00       0.00               1.00             0.0
+   >=5000 40          0.20       0.80               0.00             0.0
+2026-11-23 01:52:50,405 INFO synthese k
+      bin  n  K_median  K_q25  K_q75  slope_logK_logarea
+1000-5000 40      48.0  39.75   69.5            0.922940
+ 200-1000 40      12.5   8.75   18.0            0.998825
+   50-200 40       2.0   2.00    4.0            1.192054
+   >=5000 40     127.0 126.00  128.0            0.002719
+2026-11-23 01:52:50,415 INFO synthese error
+      bin  n  n_diverged  nrmse_median  nrmse_p90  share_target_reached  compression_ratio_median  mass_bias_median  peak_bias_median
+1000-5000 40           0      0.130912   0.185999                  0.15                  0.247388         -0.017273         -0.035564
+ 200-1000 40           0      0.172419   0.235871                  0.05                  0.241379         -0.030459         -0.095400
+   50-200 40           0      0.280429   0.476250                  0.00                  0.213753         -0.080576         -0.166103
+   >=5000 40           0      0.136955   0.202337                  0.20                  0.055832         -0.019650         -0.121535
+2026-11-23 01:52:50,416 INFO 160 cellules, duree totale 10365.4 s

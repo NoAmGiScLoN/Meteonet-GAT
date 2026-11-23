@@ -1,0 +1,36 @@
+2026-11-22 20:27:16,163 INFO log-w table loaded: results/07_sessionB/smoke/diffusion_profiles_logw_ace17c5890.pt (key ace17c5890)
+2026-11-22 20:27:16,242 INFO classe 50-200 : 1 cellules a ajuster (0 deja faites)
+2026-11-22 20:27:20,474 INFO echauffement GPU (classe 50-200, cellule 0) : 4.2 s — resultat ignore
+2026-11-22 20:27:21,433 INFO cellule 0 : arret compression a K=6 (nrmse 0.331)
+2026-11-22 20:27:21,501 INFO classe 50-200 groupe 0 : 1 cellules, 1.0 s, 0.19 s/vague, pic 307200 o
+2026-11-22 20:27:21,502 INFO classe 200-1000 : 1 cellules a ajuster (0 deja faites)
+2026-11-22 20:27:21,569 INFO echauffement GPU (classe 200-1000, cellule 40) : 0.1 s — resultat ignore
+2026-11-22 20:27:23,088 INFO cellule 40 : arret compression a K=13 (nrmse 0.633)
+2026-11-22 20:27:23,161 INFO classe 200-1000 groupe 0 : 1 cellules, 1.6 s, 0.19 s/vague, pic 511488 o
+2026-11-22 20:27:23,162 INFO classe 1000-5000 : 1 cellules a ajuster (0 deja faites)
+2026-11-22 20:27:23,236 INFO echauffement GPU (classe 1000-5000, cellule 80) : 0.1 s — resultat ignore
+2026-11-22 20:27:25,387 INFO cellule 80 : arret cap a K=16 (nrmse 1.059)
+2026-11-22 20:27:25,439 INFO classe 1000-5000 groupe 0 : 1 cellules, 2.2 s, 0.27 s/vague, pic 3104256 o
+2026-11-22 20:27:25,440 INFO classe >=5000 : 1 cellules a ajuster (0 deja faites)
+2026-11-22 20:27:25,516 INFO echauffement GPU (classe >=5000, cellule 120) : 0.1 s — resultat ignore
+2026-11-22 20:27:27,261 INFO cellule 120 : arret cap a K=16 (nrmse 0.960)
+2026-11-22 20:27:27,319 INFO classe >=5000 groupe 0 : 1 cellules, 1.8 s, 0.22 s/vague, pic 8043008 o
+2026-11-22 20:27:27,420 INFO synthese stop
+      bin  n  share_target  share_cap  share_compression  share_diverged
+1000-5000  1           0.0        1.0                0.0             0.0
+ 200-1000  1           0.0        0.0                1.0             0.0
+   50-200  1           0.0        0.0                1.0             0.0
+   >=5000  1           0.0        1.0                0.0             0.0
+2026-11-22 20:27:27,440 INFO synthese k
+      bin  n  K_median  K_q25  K_q75  slope_logK_logarea
+1000-5000  1      16.0   16.0   16.0                 NaN
+ 200-1000  1      13.0   13.0   13.0                 NaN
+   50-200  1       6.0    6.0    6.0                 NaN
+   >=5000  1      16.0   16.0   16.0                 NaN
+2026-11-22 20:27:27,462 INFO synthese error
+      bin  n  n_diverged  nrmse_median  nrmse_p90  share_target_reached  compression_ratio_median  mass_bias_median  peak_bias_median
+1000-5000  1           0      1.059196   1.059196                   0.0                  0.051972          1.419269         -0.130051
+ 200-1000  1           0      0.633436   0.633436                   0.0                  0.235142          0.542701         -0.059981
+   50-200  1           0      0.330933   0.330933                   0.0                  0.218750          0.080479         -0.131426
+   >=5000  1           0      0.959811   0.959811                   0.0                  0.019241          1.357661         -0.141120
+2026-11-22 20:27:27,464 INFO 4 cellules, duree totale 11.2 s

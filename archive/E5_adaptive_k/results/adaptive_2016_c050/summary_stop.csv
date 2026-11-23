@@ -1,0 +1,4 @@
+bin,n,share_target,share_cap,share_compression,share_diverged
+1000-5000,40,0.925,0.075,0.0,0.0
+200-1000,40,0.8,0.0,0.2,0.0
+50-200,40,0.1,0.0,0.9,0.0

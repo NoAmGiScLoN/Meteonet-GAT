@@ -1,0 +1,26 @@
+log-w table loaded: results/07_sessionB/floor256/diffusion_profiles_logw_ace17c5890.pt (key ace17c5890)
+classe >=5000 : 10 cellules a ajuster (0 deja faites)
+echauffement GPU (classe >=5000, cellule 125) : 4.3 s — resultat ignore
+cellule 127 : arret target a K=179 (nrmse 0.088)
+cellule 125 : arret target a K=252 (nrmse 0.095)
+cellule 131 : arret cap a K=232 (nrmse 0.151)
+cellule 132 : arret cap a K=256 (nrmse 0.104)
+classe >=5000 groupe 0 : 4 cellules, 859.3 s, 53.69 s/vague, pic 331266560 o
+cellule 144 : arret target a K=117 (nrmse 0.095)
+cellule 133 : arret cap a K=192 (nrmse 0.146)
+cellule 142 : arret cap a K=242 (nrmse 0.100)
+cellule 147 : arret target a K=256 (nrmse 0.088)
+classe >=5000 groupe 1 : 4 cellules, 1015.0 s, 63.42 s/vague, pic 339635200 o
+cellule 152 : arret target a K=247 (nrmse 0.094)
+cellule 154 : arret cap a K=216 (nrmse 0.136)
+classe >=5000 groupe 2 : 2 cellules, 708.8 s, 44.29 s/vague, pic 167388160 o
+synthese stop
+   bin  n  share_target  share_cap  share_compression  share_diverged
+>=5000 10           0.5        0.5                0.0             0.0
+synthese k
+   bin  n  K_median  K_q25  K_q75  slope_logK_logarea
+>=5000 10     237.0  198.0 250.75            0.242037
+synthese error
+   bin  n  n_diverged  nrmse_median  nrmse_p90  share_target_reached  compression_ratio_median  mass_bias_median  peak_bias_median
+>=5000 10           0      0.097759   0.146885                   0.5                  0.061012          -0.01084         -0.045744
+10 cellules, duree totale 2587.5 s

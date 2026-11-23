@@ -1,0 +1,2 @@
+bin,n,n_diverged,nrmse_median,nrmse_p90,share_target_reached,compression_ratio_median,mass_bias_median,peak_bias_median
+>=5000,10,0,0.09775859490036964,0.14688489586114883,0.5,0.061012204092777925,-0.010840397420859776,-0.04574410904221042

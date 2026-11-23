@@ -11,6 +11,7 @@ Index of the completed experiments. Each folder holds the archived outputs of on
 | E2b — variable sources, Jetson baseline | Full programme: equal budget, stability, ablation, another season, restarts | [D10, D11, D16](../README.md#9-decision-log) | [E2b report](E2_variable_sources/02_jetson_baseline/report.md) |
 | E3 — diff7 and iterations per wave | Can `τ` be dropped? Which `w` table? How many iterations per wave? | [D17–D19](../README.md#9-decision-log) | [E3 report](E3_diff7_convergence/report.md) |
 | E4 — optimizer, diff7 stability, noise floor | Does a decaying learning rate help? How stable is diff7? What error does the data allow? | [D20–D22](../README.md#9-decision-log) | [E4 report](E4_optimizer_stability_floor/report.md) |
+| E5 — adaptive K per cell | Does growing K per cell to a target error beat fixed K? Which compression limit and cap? | [D23–D25](../README.md#9-decision-log) | [E5 report](E5_adaptive_k/report.md) |
 
 Nothing in this folder has been deleted: the outputs were moved here from `results/` with `git mv`, so the rename
 history is kept. The code that produced them was not moved. It is pinned by the git tag `v0-jetson-baseline`

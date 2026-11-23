@@ -1,0 +1,431 @@
+nohup: ignoring input
+commit : f67b41e | 2026-11-23 11:49
+python 3.12.3 | torch 2.15.0+cu132 | CUDA : True
+GPU : Orin
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+
+=== 5_adaptive_2016_c050 — début 11:49 ===
+log-w table loaded: results/07_sessionB/adaptive_2016_c050/diffusion_profiles_logw_ace17c5890.pt (key ace17c5890)
+classe 50-200 : 40 cellules a ajuster (0 deja faites)
+echauffement GPU (classe 50-200, cellule 0) : 9.3 s — resultat ignore
+cellule 3 : arret compression a K=3 (nrmse 0.171)
+cellule 12 : arret compression a K=3 (nrmse 0.141)
+cellule 13 : arret compression a K=3 (nrmse 0.156)
+cellule 21 : arret compression a K=3 (nrmse 0.230)
+cellule 23 : arret compression a K=3 (nrmse 0.114)
+cellule 32 : arret compression a K=3 (nrmse 0.175)
+cellule 36 : arret compression a K=3 (nrmse 0.140)
+cellule 38 : arret compression a K=3 (nrmse 0.259)
+cellule 9 : arret compression a K=4 (nrmse 0.167)
+cellule 10 : arret compression a K=4 (nrmse 0.173)
+cellule 14 : arret compression a K=4 (nrmse 0.169)
+cellule 24 : arret compression a K=4 (nrmse 0.223)
+cellule 26 : arret compression a K=4 (nrmse 0.323)
+cellule 28 : arret compression a K=4 (nrmse 0.164)
+cellule 37 : arret target a K=4 (nrmse 0.098)
+cellule 39 : arret compression a K=4 (nrmse 0.230)
+cellule 1 : arret compression a K=5 (nrmse 0.111)
+cellule 2 : arret compression a K=5 (nrmse 0.111)
+cellule 5 : arret compression a K=5 (nrmse 0.195)
+cellule 7 : arret compression a K=6 (nrmse 0.112)
+cellule 8 : arret compression a K=5 (nrmse 0.180)
+cellule 11 : arret compression a K=6 (nrmse 0.137)
+cellule 15 : arret compression a K=6 (nrmse 0.164)
+cellule 25 : arret compression a K=5 (nrmse 0.199)
+cellule 27 : arret compression a K=5 (nrmse 0.190)
+cellule 35 : arret compression a K=5 (nrmse 0.195)
+cellule 4 : arret compression a K=8 (nrmse 0.163)
+cellule 6 : arret compression a K=7 (nrmse 0.216)
+cellule 17 : arret compression a K=8 (nrmse 0.147)
+cellule 18 : arret compression a K=8 (nrmse 0.200)
+cellule 19 : arret target a K=8 (nrmse 0.087)
+cellule 22 : arret compression a K=8 (nrmse 0.174)
+cellule 29 : arret compression a K=7 (nrmse 0.121)
+cellule 30 : arret compression a K=7 (nrmse 0.157)
+cellule 33 : arret compression a K=8 (nrmse 0.118)
+cellule 34 : arret compression a K=8 (nrmse 0.103)
+cellule 0 : arret target a K=12 (nrmse 0.095)
+cellule 16 : arret compression a K=11 (nrmse 0.114)
+cellule 20 : arret compression a K=12 (nrmse 0.107)
+cellule 31 : arret target a K=9 (nrmse 0.088)
+classe 50-200 groupe 0 : 40 cellules, 84.5 s, 11.93 s/vague, pic 9569792 o
+classe 200-1000 : 40 cellules a ajuster (0 deja faites)
+echauffement GPU (classe 200-1000, cellule 40) : 0.1 s — resultat ignore
+cellule 45 : arret target a K=12 (nrmse 0.088)
+cellule 46 : arret target a K=12 (nrmse 0.081)
+cellule 48 : arret target a K=12 (nrmse 0.093)
+cellule 43 : arret target a K=16 (nrmse 0.076)
+cellule 53 : arret target a K=15 (nrmse 0.085)
+cellule 56 : arret target a K=16 (nrmse 0.092)
+cellule 40 : arret target a K=24 (nrmse 0.075)
+cellule 42 : arret target a K=21 (nrmse 0.096)
+cellule 44 : arret target a K=20 (nrmse 0.094)
+cellule 47 : arret target a K=22 (nrmse 0.066)
+cellule 59 : arret target a K=22 (nrmse 0.080)
+cellule 41 : arret target a K=32 (nrmse 0.081)
+cellule 49 : arret target a K=32 (nrmse 0.093)
+cellule 50 : arret target a K=32 (nrmse 0.092)
+cellule 54 : arret compression a K=28 (nrmse 0.115)
+cellule 57 : arret compression a K=25 (nrmse 0.105)
+cellule 58 : arret target a K=32 (nrmse 0.068)
+cellule 51 : arret compression a K=34 (nrmse 0.103)
+cellule 52 : arret target a K=47 (nrmse 0.071)
+cellule 55 : arret target a K=48 (nrmse 0.083)
+classe 200-1000 groupe 0 : 20 cellules, 391.8 s, 35.56 s/vague, pic 23130624 o
+cellule 61 : arret target a K=16 (nrmse 0.084)
+cellule 63 : arret target a K=16 (nrmse 0.090)
+cellule 64 : arret compression a K=14 (nrmse 0.122)
+cellule 65 : arret target a K=16 (nrmse 0.084)
+cellule 66 : arret target a K=16 (nrmse 0.097)
+cellule 69 : arret target a K=16 (nrmse 0.098)
+cellule 62 : arret compression a K=17 (nrmse 0.118)
+cellule 67 : arret target a K=22 (nrmse 0.070)
+cellule 71 : arret target a K=21 (nrmse 0.077)
+cellule 72 : arret target a K=20 (nrmse 0.074)
+cellule 74 : arret compression a K=18 (nrmse 0.133)
+cellule 77 : arret target a K=24 (nrmse 0.084)
+cellule 68 : arret target a K=32 (nrmse 0.097)
+cellule 73 : arret compression a K=27 (nrmse 0.138)
+cellule 75 : arret target a K=32 (nrmse 0.089)
+cellule 76 : arret target a K=32 (nrmse 0.088)
+cellule 78 : arret compression a K=26 (nrmse 0.127)
+cellule 60 : arret target a K=48 (nrmse 0.083)
+cellule 70 : arret target a K=48 (nrmse 0.095)
+cellule 79 : arret target a K=48 (nrmse 0.076)
+classe 200-1000 groupe 1 : 20 cellules, 390.6 s, 35.46 s/vague, pic 25649152 o
+classe 1000-5000 : 40 cellules a ajuster (0 deja faites)
+echauffement GPU (classe 1000-5000, cellule 80) : 0.1 s — resultat ignore
+cellule 82 : arret target a K=48 (nrmse 0.088)
+cellule 85 : arret target a K=64 (nrmse 0.077)
+cellule 80 : arret target a K=96 (nrmse 0.089)
+cellule 83 : arret target a K=74 (nrmse 0.079)
+cellule 86 : arret target a K=95 (nrmse 0.089)
+cellule 87 : arret target a K=96 (nrmse 0.090)
+cellule 88 : arret target a K=90 (nrmse 0.082)
+cellule 89 : arret target a K=96 (nrmse 0.079)
+cellule 81 : arret target a K=127 (nrmse 0.098)
+cellule 84 : arret target a K=126 (nrmse 0.077)
+classe 1000-5000 groupe 0 : 10 cellules, 571.9 s, 40.83 s/vague, pic 61771776 o
+cellule 92 : arret target a K=32 (nrmse 0.098)
+cellule 95 : arret target a K=32 (nrmse 0.094)
+cellule 94 : arret target a K=48 (nrmse 0.077)
+cellule 97 : arret target a K=48 (nrmse 0.092)
+cellule 98 : arret target a K=48 (nrmse 0.084)
+cellule 99 : arret target a K=48 (nrmse 0.087)
+cellule 96 : arret target a K=64 (nrmse 0.094)
+cellule 90 : arret target a K=83 (nrmse 0.087)
+cellule 91 : arret target a K=96 (nrmse 0.100)
+cellule 93 : arret cap a K=128 (nrmse 0.115)
+classe 1000-5000 groupe 1 : 10 cellules, 509.2 s, 36.35 s/vague, pic 53951488 o
+cellule 102 : arret target a K=32 (nrmse 0.098)
+cellule 103 : arret target a K=32 (nrmse 0.092)
+cellule 106 : arret target a K=48 (nrmse 0.091)
+cellule 107 : arret target a K=48 (nrmse 0.087)
+cellule 108 : arret target a K=48 (nrmse 0.096)
+cellule 105 : arret target a K=64 (nrmse 0.091)
+cellule 109 : arret target a K=64 (nrmse 0.083)
+cellule 100 : arret cap a K=126 (nrmse 0.161)
+cellule 101 : arret target a K=127 (nrmse 0.088)
+cellule 104 : arret target a K=127 (nrmse 0.088)
+classe 1000-5000 groupe 2 : 10 cellules, 490.7 s, 35.03 s/vague, pic 66408448 o
+cellule 113 : arret target a K=32 (nrmse 0.096)
+cellule 110 : arret target a K=64 (nrmse 0.096)
+cellule 112 : arret target a K=64 (nrmse 0.092)
+cellule 115 : arret target a K=64 (nrmse 0.086)
+cellule 116 : arret target a K=64 (nrmse 0.091)
+cellule 119 : arret target a K=64 (nrmse 0.099)
+cellule 114 : arret target a K=95 (nrmse 0.077)
+cellule 117 : arret target a K=95 (nrmse 0.093)
+cellule 118 : arret target a K=96 (nrmse 0.084)
+cellule 111 : arret cap a K=128 (nrmse 0.110)
+classe 1000-5000 groupe 3 : 10 cellules, 540.7 s, 38.60 s/vague, pic 68252160 o
+synthese stop
+      bin  n  share_target  share_cap  share_compression  share_diverged
+1000-5000 40         0.925      0.075                0.0             0.0
+ 200-1000 40         0.800      0.000                0.2             0.0
+   50-200 40         0.100      0.000                0.9             0.0
+synthese k
+      bin  n  K_median  K_q25  K_q75  slope_logK_logarea
+1000-5000 40      64.0   48.0   96.0            0.619835
+ 200-1000 40      22.0   16.0   32.0            0.721888
+   50-200 40       5.0    4.0    8.0            1.120711
+synthese error
+      bin  n  n_diverged  nrmse_median  nrmse_p90  share_target_reached  compression_ratio_median  mass_bias_median  peak_bias_median
+1000-5000 40           0      0.090458   0.099117                 0.925                  0.250133         -0.008661         -0.038826
+ 200-1000 40           0      0.088576   0.118435                 0.800                  0.445919         -0.008402         -0.044793
+   50-200 40           0      0.163530   0.223667                 0.100                  0.460526         -0.027150         -0.022643
+120 cellules, duree totale 2989.3 s
+=== 5_adaptive_2016_c050 — fin 12:39 ===
+cp: warning: behavior of -n is non-portable and may change in future; use --update=none instead
+
+=== 6_adaptive_2017_c050 — début 12:39 ===
+log-w table loaded: results/07_sessionB/adaptive_2017_c050/diffusion_profiles_logw_ace17c5890.pt (key ace17c5890)
+classe 50-200 : 40 cellules a ajuster (0 deja faites)
+echauffement GPU (classe 50-200, cellule 0) : 4.2 s — resultat ignore
+cellule 3 : arret compression a K=3 (nrmse 0.292)
+cellule 17 : arret target a K=3 (nrmse 0.099)
+cellule 20 : arret compression a K=3 (nrmse 0.297)
+cellule 32 : arret compression a K=3 (nrmse 0.227)
+cellule 34 : arret compression a K=3 (nrmse 0.239)
+cellule 0 : arret compression a K=4 (nrmse 0.226)
+cellule 4 : arret compression a K=4 (nrmse 0.141)
+cellule 8 : arret compression a K=4 (nrmse 0.115)
+cellule 16 : arret compression a K=4 (nrmse 0.236)
+cellule 22 : arret compression a K=4 (nrmse 0.161)
+cellule 25 : arret compression a K=4 (nrmse 0.109)
+cellule 28 : arret compression a K=4 (nrmse 0.347)
+cellule 33 : arret compression a K=4 (nrmse 0.181)
+cellule 37 : arret compression a K=4 (nrmse 0.220)
+cellule 7 : arret compression a K=5 (nrmse 0.433)
+cellule 9 : arret compression a K=5 (nrmse 0.171)
+cellule 11 : arret compression a K=5 (nrmse 0.199)
+cellule 14 : arret compression a K=6 (nrmse 0.289)
+cellule 18 : arret compression a K=5 (nrmse 0.161)
+cellule 19 : arret target a K=5 (nrmse 0.094)
+cellule 23 : arret compression a K=6 (nrmse 0.199)
+cellule 27 : arret compression a K=6 (nrmse 0.134)
+cellule 29 : arret compression a K=6 (nrmse 0.161)
+cellule 31 : arret compression a K=5 (nrmse 0.270)
+cellule 38 : arret compression a K=6 (nrmse 0.276)
+cellule 39 : arret compression a K=5 (nrmse 0.227)
+cellule 1 : arret compression a K=7 (nrmse 0.100)
+cellule 12 : arret compression a K=8 (nrmse 0.161)
+cellule 13 : arret compression a K=8 (nrmse 0.111)
+cellule 21 : arret compression a K=7 (nrmse 0.289)
+cellule 24 : arret compression a K=7 (nrmse 0.147)
+cellule 35 : arret compression a K=8 (nrmse 0.237)
+cellule 2 : arret compression a K=9 (nrmse 0.130)
+cellule 6 : arret compression a K=9 (nrmse 0.149)
+cellule 10 : arret compression a K=10 (nrmse 0.166)
+cellule 15 : arret compression a K=9 (nrmse 0.174)
+cellule 26 : arret compression a K=10 (nrmse 0.187)
+cellule 30 : arret compression a K=10 (nrmse 0.175)
+cellule 36 : arret compression a K=11 (nrmse 0.167)
+cellule 5 : arret target a K=13 (nrmse 0.099)
+classe 50-200 groupe 0 : 40 cellules, 109.6 s, 13.56 s/vague, pic 9262592 o
+classe 200-1000 : 40 cellules a ajuster (0 deja faites)
+echauffement GPU (classe 200-1000, cellule 40) : 0.1 s — resultat ignore
+cellule 44 : arret target a K=16 (nrmse 0.084)
+cellule 45 : arret compression a K=15 (nrmse 0.135)
+cellule 47 : arret compression a K=16 (nrmse 0.159)
+cellule 51 : arret target a K=15 (nrmse 0.089)
+cellule 53 : arret compression a K=16 (nrmse 0.144)
+cellule 55 : arret target a K=16 (nrmse 0.065)
+cellule 57 : arret target a K=16 (nrmse 0.080)
+cellule 43 : arret compression a K=17 (nrmse 0.127)
+cellule 48 : arret target a K=24 (nrmse 0.091)
+cellule 49 : arret target a K=24 (nrmse 0.070)
+cellule 50 : arret compression a K=19 (nrmse 0.121)
+cellule 54 : arret compression a K=21 (nrmse 0.100)
+cellule 41 : arret compression a K=25 (nrmse 0.113)
+cellule 46 : arret target a K=32 (nrmse 0.096)
+cellule 52 : arret compression a K=25 (nrmse 0.184)
+cellule 40 : arret target a K=47 (nrmse 0.083)
+cellule 42 : arret target a K=34 (nrmse 0.094)
+cellule 56 : arret compression a K=40 (nrmse 0.196)
+cellule 58 : arret target a K=48 (nrmse 0.094)
+cellule 59 : arret compression a K=36 (nrmse 0.161)
+classe 200-1000 groupe 0 : 20 cellules, 411.5 s, 37.35 s/vague, pic 23630848 o
+cellule 74 : arret target a K=12 (nrmse 0.085)
+cellule 64 : arret target a K=15 (nrmse 0.084)
+cellule 71 : arret target a K=16 (nrmse 0.090)
+cellule 73 : arret compression a K=16 (nrmse 0.162)
+cellule 61 : arret compression a K=19 (nrmse 0.111)
+cellule 69 : arret compression a K=23 (nrmse 0.110)
+cellule 75 : arret target a K=24 (nrmse 0.084)
+cellule 77 : arret target a K=24 (nrmse 0.090)
+cellule 79 : arret compression a K=22 (nrmse 0.107)
+cellule 60 : arret target a K=29 (nrmse 0.090)
+cellule 66 : arret compression a K=30 (nrmse 0.142)
+cellule 68 : arret compression a K=32 (nrmse 0.110)
+cellule 70 : arret compression a K=25 (nrmse 0.126)
+cellule 76 : arret compression a K=25 (nrmse 0.137)
+cellule 62 : arret target a K=48 (nrmse 0.100)
+cellule 63 : arret target a K=36 (nrmse 0.092)
+cellule 65 : arret target a K=47 (nrmse 0.080)
+cellule 67 : arret target a K=48 (nrmse 0.074)
+cellule 72 : arret compression a K=41 (nrmse 0.125)
+cellule 78 : arret target a K=48 (nrmse 0.093)
+classe 200-1000 groupe 1 : 20 cellules, 389.4 s, 35.35 s/vague, pic 21971456 o
+classe 1000-5000 : 40 cellules a ajuster (0 deja faites)
+echauffement GPU (classe 1000-5000, cellule 80) : 0.1 s — resultat ignore
+cellule 89 : arret target a K=48 (nrmse 0.079)
+cellule 80 : arret target a K=64 (nrmse 0.097)
+cellule 82 : arret target a K=64 (nrmse 0.079)
+cellule 86 : arret target a K=64 (nrmse 0.080)
+cellule 83 : arret compression a K=85 (nrmse 0.101)
+cellule 85 : arret target a K=96 (nrmse 0.087)
+cellule 87 : arret target a K=96 (nrmse 0.070)
+cellule 81 : arret target a K=126 (nrmse 0.092)
+cellule 84 : arret cap a K=124 (nrmse 0.150)
+cellule 88 : arret cap a K=127 (nrmse 0.104)
+classe 1000-5000 groupe 0 : 10 cellules, 551.8 s, 39.39 s/vague, pic 57172992 o
+cellule 90 : arret target a K=48 (nrmse 0.098)
+cellule 93 : arret target a K=47 (nrmse 0.076)
+cellule 96 : arret target a K=63 (nrmse 0.082)
+cellule 91 : arret target a K=94 (nrmse 0.098)
+cellule 92 : arret target a K=76 (nrmse 0.093)
+cellule 95 : arret target a K=78 (nrmse 0.090)
+cellule 94 : arret cap a K=128 (nrmse 0.103)
+cellule 97 : arret cap a K=127 (nrmse 0.122)
+cellule 98 : arret cap a K=127 (nrmse 0.118)
+cellule 99 : arret target a K=127 (nrmse 0.089)
+classe 1000-5000 groupe 1 : 10 cellules, 519.3 s, 37.08 s/vague, pic 68307968 o
+cellule 108 : arret target a K=32 (nrmse 0.097)
+cellule 105 : arret target a K=64 (nrmse 0.085)
+cellule 107 : arret target a K=62 (nrmse 0.091)
+cellule 100 : arret target a K=83 (nrmse 0.072)
+cellule 102 : arret target a K=85 (nrmse 0.096)
+cellule 103 : arret compression a K=92 (nrmse 0.130)
+cellule 104 : arret target a K=95 (nrmse 0.098)
+cellule 101 : arret cap a K=127 (nrmse 0.122)
+cellule 106 : arret target a K=126 (nrmse 0.079)
+cellule 109 : arret cap a K=128 (nrmse 0.109)
+classe 1000-5000 groupe 2 : 10 cellules, 524.7 s, 37.46 s/vague, pic 50488320 o
+cellule 119 : arret target a K=32 (nrmse 0.093)
+cellule 117 : arret target a K=48 (nrmse 0.090)
+cellule 110 : arret target a K=64 (nrmse 0.092)
+cellule 113 : arret target a K=63 (nrmse 0.091)
+cellule 118 : arret target a K=63 (nrmse 0.084)
+cellule 111 : arret target a K=86 (nrmse 0.073)
+cellule 112 : arret compression a K=92 (nrmse 0.133)
+cellule 114 : arret cap a K=128 (nrmse 0.109)
+cellule 115 : arret target a K=111 (nrmse 0.087)
+cellule 116 : arret cap a K=127 (nrmse 0.176)
+classe 1000-5000 groupe 3 : 10 cellules, 513.6 s, 36.66 s/vague, pic 59442688 o
+synthese stop
+      bin  n  share_target  share_cap  share_compression  share_diverged
+1000-5000 40         0.700      0.225              0.075             0.0
+ 200-1000 40         0.525      0.000              0.475             0.0
+   50-200 40         0.075      0.000              0.925             0.0
+synthese k
+      bin  n  K_median  K_q25  K_q75  slope_logK_logarea
+1000-5000 40      85.5  63.75  126.0            0.594020
+ 200-1000 40      24.0  16.00   34.5            0.814741
+   50-200 40       5.0   4.00    8.0            1.098581
+synthese error
+      bin  n  n_diverged  nrmse_median  nrmse_p90  share_target_reached  compression_ratio_median  mass_bias_median  peak_bias_median
+1000-5000 40           0      0.092468   0.123050                 0.700                  0.399869         -0.009391         -0.018654
+ 200-1000 40           0      0.098150   0.159146                 0.525                  0.488955         -0.010095         -0.008027
+   50-200 40           0      0.174489   0.289563                 0.075                  0.460526         -0.031007         -0.073323
+120 cellules, duree totale 3024.8 s
+=== 6_adaptive_2017_c050 — fin 13:30 ===
+--- results/07_sessionB/adaptive_2016/summary_stop.csv
+bin,n,share_target,share_cap,share_compression,share_diverged
+1000-5000,40,0.65,0.025,0.325,0.0
+200-1000,40,0.175,0.0,0.825,0.0
+50-200,40,0.0,0.0,1.0,0.0
+>=5000,40,0.3,0.7,0.0,0.0
+--- results/07_sessionB/adaptive_2016/summary_k.csv
+bin,n,K_median,K_q25,K_q75,slope_logK_logarea
+1000-5000,40,55.5,41.0,84.25,0.8331012556878712
+200-1000,40,12.0,10.0,21.25,1.026085071859792
+50-200,40,2.0,2.0,4.0,1.376248588189687
+>=5000,40,127.0,122.75,128.0,0.010699980612141759
+--- results/07_sessionB/adaptive_2016/summary_error.csv
+bin,n,n_diverged,nrmse_median,nrmse_p90,share_target_reached,compression_ratio_median,mass_bias_median,peak_bias_median
+1000-5000,40,0,0.09527431428432465,0.13305413573980332,0.65,0.2442612587768609,-0.009521695877377157,-0.048128201915024725
+200-1000,40,0,0.13166674971580505,0.18772004246711732,0.175,0.24156052604328465,-0.019562014840130038,-0.08327444215955572
+50-200,40,0,0.2553936392068863,0.3787349909543991,0.0,0.21085102522228272,-0.06751891782237793,-0.0827096474454112
+>=5000,40,0,0.11001118645071983,0.15575093328952794,0.3,0.10024859903151748,-0.013034759563758172,-0.06510057476966763
+--- results/07_sessionB/floor256/summary_stop.csv
+bin,n,share_target,share_cap,share_compression,share_diverged
+>=5000,10,0.5,0.5,0.0,0.0
+--- results/07_sessionB/floor256/summary_k.csv
+bin,n,K_median,K_q25,K_q75,slope_logK_logarea
+>=5000,10,237.0,198.0,250.75,0.2420368199717786
+--- results/07_sessionB/floor256/summary_error.csv
+bin,n,n_diverged,nrmse_median,nrmse_p90,share_target_reached,compression_ratio_median,mass_bias_median,peak_bias_median
+>=5000,10,0,0.09775859490036964,0.14688489586114883,0.5,0.061012204092777925,-0.010840397420859776,-0.04574410904221042
+--- results/07_sessionB/adaptive_2017/summary_stop.csv
+bin,n,share_target,share_cap,share_compression,share_diverged
+1000-5000,40,0.15,0.05,0.8,0.0
+200-1000,40,0.05,0.0,0.95,0.0
+50-200,40,0.0,0.0,1.0,0.0
+>=5000,40,0.2,0.8,0.0,0.0
+--- results/07_sessionB/adaptive_2017/summary_k.csv
+bin,n,K_median,K_q25,K_q75,slope_logK_logarea
+1000-5000,40,48.0,39.75,69.5,0.9229403168804392
+200-1000,40,12.5,8.75,18.0,0.9988246586560969
+50-200,40,2.0,2.0,4.0,1.1920543422516257
+>=5000,40,127.0,126.0,128.0,0.0027189543635781927
+--- results/07_sessionB/adaptive_2017/summary_error.csv
+bin,n,n_diverged,nrmse_median,nrmse_p90,share_target_reached,compression_ratio_median,mass_bias_median,peak_bias_median
+1000-5000,40,0,0.13091205060482025,0.18599899858236313,0.15,0.2473875968992248,-0.01727342497031012,-0.035563764355808894
+200-1000,40,0,0.17241932451725006,0.2358708545565605,0.05,0.2413793103448276,-0.030458973559239617,-0.09539980231701481
+50-200,40,0,0.2804286479949951,0.4762500733137131,0.0,0.21375291375291378,-0.08057589957579955,-0.16610254401270425
+>=5000,40,0,0.1369553878903389,0.20233698040246964,0.2,0.05583245418079909,-0.019650161007826475,-0.12153473252610755
+--- results/07_sessionB/adaptive_2016_c050/summary_stop.csv
+bin,n,share_target,share_cap,share_compression,share_diverged
+1000-5000,40,0.925,0.075,0.0,0.0
+200-1000,40,0.8,0.0,0.2,0.0
+50-200,40,0.1,0.0,0.9,0.0
+--- results/07_sessionB/adaptive_2016_c050/summary_k.csv
+bin,n,K_median,K_q25,K_q75,slope_logK_logarea
+1000-5000,40,64.0,48.0,96.0,0.6198345739388263
+200-1000,40,22.0,16.0,32.0,0.7218875474971566
+50-200,40,5.0,4.0,8.0,1.120711362070745
+--- results/07_sessionB/adaptive_2016_c050/summary_error.csv
+bin,n,n_diverged,nrmse_median,nrmse_p90,share_target_reached,compression_ratio_median,mass_bias_median,peak_bias_median
+1000-5000,40,0,0.09045768156647682,0.09911656975746155,0.925,0.25013341074088413,-0.008661174598457323,-0.038826073455999074
+200-1000,40,0,0.08857590332627296,0.11843500584363938,0.8,0.4459192408086487,-0.008402353260012098,-0.04479277492254931
+50-200,40,0,0.16352950036525726,0.22366682887077333,0.1,0.4605263157894737,-0.027150415971464763,-0.022643191714694325
+--- results/07_sessionB/adaptive_2017_c050/summary_stop.csv
+bin,n,share_target,share_cap,share_compression,share_diverged
+1000-5000,40,0.7,0.225,0.075,0.0
+200-1000,40,0.525,0.0,0.475,0.0
+50-200,40,0.075,0.0,0.925,0.0
+--- results/07_sessionB/adaptive_2017_c050/summary_k.csv
+bin,n,K_median,K_q25,K_q75,slope_logK_logarea
+1000-5000,40,85.5,63.75,126.0,0.5940196444867919
+200-1000,40,24.0,16.0,34.5,0.8147414634747252
+50-200,40,5.0,4.0,8.0,1.0985809872483185
+--- results/07_sessionB/adaptive_2017_c050/summary_error.csv
+bin,n,n_diverged,nrmse_median,nrmse_p90,share_target_reached,compression_ratio_median,mass_bias_median,peak_bias_median
+1000-5000,40,0,0.09246817976236343,0.12305011451244355,0.7,0.39986871898636606,-0.009390679879909315,-0.018654371153083837
+200-1000,40,0,0.0981503315269947,0.15914566963911056,0.525,0.4889548925373862,-0.0100951911943339,-0.008027073821144794
+50-200,40,0,0.1744888499379158,0.28956336677074435,0.075,0.4605263157894737,-0.03100704015775123,-0.07332279140391523
+--- results/07_sessionB/adaptive_2016/memory.csv
+pic memoire max : 274 Mo | temps cumule des groupes : 151.8 min
+           peak_Mo  seconds
+bin                        
+1000-5000     65.5   2103.3
+200-1000      22.9    721.0
+50-200         7.1     61.9
+>=5000       273.5   6219.2
+--- results/07_sessionB/floor256/memory.csv
+pic memoire max : 324 Mo | temps cumule des groupes : 43.1 min
+        peak_Mo  seconds
+bin                     
+>=5000    323.9   2583.0
+--- results/07_sessionB/adaptive_2017/memory.csv
+pic memoire max : 499 Mo | temps cumule des groupes : 172.7 min
+           peak_Mo  seconds
+bin                        
+1000-5000     68.2   2152.7
+200-1000      22.0    823.2
+50-200         7.2     72.1
+>=5000       499.4   7311.9
+--- results/07_sessionB/adaptive_2016_c050/memory.csv
+pic memoire max : 65 Mo | temps cumule des groupes : 49.7 min
+           peak_Mo  seconds
+bin                        
+1000-5000     65.1   2112.5
+200-1000      24.5    782.4
+50-200         9.1     84.5
+--- results/07_sessionB/adaptive_2017_c050/memory.csv
+pic memoire max : 65 Mo | temps cumule des groupes : 50.3 min
+           peak_Mo  seconds
+bin                        
+1000-5000     65.1   2109.5
+200-1000      22.5    800.9
+50-200         8.8    109.6
+--- floor256 : nrmse median au dernier palier k_target <= 128 vs final
+cellules : 10 (attendu 10 ; moins = groupe interrompu, voir cells_ge5000.csv) | nrmse median a k<=128 : 0.1356 | final : 0.0978
+temps total floor256 : 43.0 min (somme par cellule et vague)
+
+================ Bilan (13:30) ================
+OK     5_adaptive_2016_c050 (tentative 1)
+OK     6_adaptive_2017_c050 (tentative 1)
+Temps total : 100 min
+Résultats : results/07_sessionB/
