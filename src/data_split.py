@@ -5,21 +5,22 @@ minuit ne soit pas coupé entre train et test. Les blocs sont définis depuis un
 
 Affectation par quotas stratifiés : la strate d'un bloc est (année, saison météo) de son premier jour ;
 dans chaque strate, les blocs sont triés par sha256(sel, indice) (reproductible entre machines), les
-round(val_frac·n) premiers vont en val, les round(test_frac·n) suivants en test, le reste en train
+round-half-up(val_frac·n) premiers vont en val, les round-half-up(test_frac·n) suivants en test, le reste en train
 (au moins 1 bloc val et 1 test si n >= 3). Les quotas portent sur les blocs, y compris ceux qui
 contiennent des jours exclus ; l'exclusion du benchmark, par jour, prime ensuite sur le split du bloc.
 
 Les dates sont des horodatages radar naïfs (MeteoNet, UTC) ; les jours des vignettes d'entraînement
 doivent suivre la même convention. Les dates avec fuseau sont refusées.
 """
-import math
-from functools import lru_cache
 import hashlib
+import math
 import pickle
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from functools import lru_cache
 from pathlib import Path
+from types import MappingProxyType
 from typing import Literal
 
 import pandas as pd
@@ -65,13 +66,30 @@ def _unit_hash(salt: str, block: int) -> float:
     return int.from_bytes(digest[:_HASH_BYTES], "big") / 2 ** (8 * _HASH_BYTES)
 
 
-def _quota(frac: float, n: int) -> int:
-    return max(1, round(frac * n)) if n >= 3 else round(frac * n)
+def _half_up(x: float) -> int:
+    """Arrondi au supérieur explicite des demi (round() arrondit au pair)."""
+    return math.floor(x + 0.5)
+
+
+def _stratum_quotas(cfg: SplitConfig, n: int) -> tuple[int, int]:
+    """(n_val, n_test) d'une strate de n blocs : jamais plus que la strate, au moins 1 train si n >= 3.
+
+    Pour n >= 3 : au moins 1 val et 1 test, n_val + n_test <= n - 1 (test réduit en premier, mais >= 1).
+    Pour n < 3 : arrondi simple, sans minimum, n_val + n_test <= n.
+    """
+    n_val, n_test = _half_up(cfg.val_frac * n), _half_up(cfg.test_frac * n)
+    if n >= 3:
+        n_val = min(max(1, n_val), n - 2)
+        n_test = max(1, min(n_test, n - 1 - n_val))
+    else:
+        n_val = min(n_val, n)
+        n_test = min(n_test, n - n_val)
+    return n_val, n_test
 
 
 @lru_cache(maxsize=None)
-def _block_splits(cfg: SplitConfig) -> dict[int, str]:
-    """Table indice de bloc -> split (train/val/test), calculée une fois par configuration."""
+def _block_splits(cfg: SplitConfig) -> Mapping[int, str]:
+    """Table immuable indice de bloc -> split (train/val/test), calculée une fois par configuration."""
     first = (cfg.start - _EPOCH).days // cfg.block_days
     last = (cfg.end - _EPOCH).days // cfg.block_days
     strata: dict[tuple[int, str], list[int]] = {}
@@ -81,10 +99,10 @@ def _block_splits(cfg: SplitConfig) -> dict[int, str]:
     table: dict[int, str] = {}
     for blocks in strata.values():
         ordered = sorted(blocks, key=lambda i: _unit_hash(cfg.salt, i))
-        n_val, n_test = _quota(cfg.val_frac, len(ordered)), _quota(cfg.test_frac, len(ordered))
+        n_val, n_test = _stratum_quotas(cfg, len(ordered))
         for rank, idx in enumerate(ordered):
             table[idx] = "val" if rank < n_val else "test" if rank < n_val + n_test else "train"
-    return table
+    return MappingProxyType(table)
 
 
 def split_of(day: date, cfg: SplitConfig, excluded_days: frozenset[date]) -> Split:

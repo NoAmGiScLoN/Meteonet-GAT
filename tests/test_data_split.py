@@ -193,3 +193,30 @@ def test_real_e5_sources_are_all_excluded() -> None:
     for d in days:
         for k in (-1, 1):
             assert d + timedelta(days=k) in excl
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("val_frac,test_frac,n,expected", [
+    (0.1, 0.1, 3, (1, 1)),      # n = 3 : au moins 1 val, 1 test, 1 train
+    (0.45, 0.45, 3, (1, 1)),
+    (0.45, 0.45, 4, (2, 1)),    # n_val + n_test = 4 > n - 1 : test réduit, mais >= 1
+    (0.49, 0.49, 5, (2, 2)),
+    (0.5, 0.25, 10, (5, 3)),    # 2.5 -> 3 (round() donnerait 2 : arrondi au supérieur explicite)
+    (0.1, 0.1, 2, (0, 0)),      # n < 3 : pas de minimum imposé
+    (0.4, 0.4, 2, (1, 1)),
+    (0.1, 0.1, 0, (0, 0)),
+])
+def test_stratum_quotas_never_exceed_the_stratum_and_round_half_up(val_frac, test_frac, n, expected):
+    import data_split as ds
+    cfg = ds.SplitConfig(val_frac=val_frac, test_frac=test_frac)
+    n_val, n_test = ds._stratum_quotas(cfg, n)
+    assert (n_val, n_test) == expected
+    assert n_val + n_test <= (n - 1 if n >= 3 else n)
+
+
+@pytest.mark.unit
+def test_block_splits_cache_is_immutable():
+    import data_split as ds
+    table = ds._block_splits(ds.SplitConfig())
+    with pytest.raises(TypeError):
+        table[0] = "val"  # type: ignore[index]
