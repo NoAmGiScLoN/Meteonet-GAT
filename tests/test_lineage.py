@@ -38,17 +38,21 @@ def _links_by_pair(result: GroupResult) -> dict:
 
 
 # ------------------------------------------------------------ overlap_links
-def test_overlap_links_keeps_pair_when_parent_fraction_reaches_f_min():
+def test_overlap_links_keeps_pair_when_both_fractions_reach_f_min():
+    tracks, cells = [_track(1, area=100)], _cells([(1, 100, 10.0)])
+    out = overlap_links(np.array([[0, 10]]), tracks, cells, CFG)  # 0.1 et 0.1
+    assert out == [(0, 1, 10, 0.1, 0.1)]
+
+
+def test_overlap_links_drops_small_fragment_touching_large_cell():
+    # 10/100 = 0.1 de la piste (petite) mais 10/1000 = 0.01 de la cellule : pas de lien (ET)
     tracks, cells = [_track(1, area=100)], _cells([(1, 1000, 10.0)])
-    overlaps = np.array([[0, 10]])  # 10/100 = 0.1 >= f_min, 10/1000 = 0.01
-    out = overlap_links(overlaps, tracks, cells, CFG)
-    assert out == [(0, 1, 10, 0.1, 0.01)]
+    assert overlap_links(np.array([[0, 10]]), tracks, cells, CFG) == []
 
 
-def test_overlap_links_keeps_pair_when_child_fraction_reaches_f_min():
+def test_overlap_links_drops_small_cell_touching_large_track():
     tracks, cells = [_track(1, area=1000)], _cells([(1, 100, 10.0)])
-    out = overlap_links(np.array([[0, 10]]), tracks, cells, CFG)
-    assert [(c[0], c[1]) for c in out] == [(0, 1)]
+    assert overlap_links(np.array([[0, 10]]), tracks, cells, CFG) == []
 
 
 def test_overlap_links_drops_pair_below_f_min_in_both_directions():

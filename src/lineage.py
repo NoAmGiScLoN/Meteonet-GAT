@@ -95,7 +95,10 @@ class GroupResult:
 
 def overlap_links(overlaps: np.ndarray, tracks: Sequence[Track], cells: pd.DataFrame,
                   cfg: TrackerConfig) -> list[Candidate]:
-    """Liens (piste, cellule) : inter / aire piste >= f_min OU inter / aire cellule >= f_min.
+    """Liens (piste, cellule) : inter / aire piste >= f_min ET inter / aire cellule >= f_min.
+
+    Le recouvrement doit donc valoir au moins f_min de l'objet le plus grand : un petit
+    fragment qui touche une grande cellule n'est pas lié.
 
     `overlaps` : sortie de association.overlap_counts (colonne = local_id, colonne 0 = fond).
     Retourne les Candidate triés par (indice de piste, local_id).
@@ -113,7 +116,7 @@ def overlap_links(overlaps: np.ndarray, tracks: Sequence[Track], cells: pd.DataF
     inter = overlaps[:, lids]
     frac_t = inter / np.array([t.area for t in tracks], dtype=float)[:, None]
     frac_c = inter / cells.area_px.to_numpy(dtype=float)[None, :]
-    keep = (inter > 0) & ((frac_t >= cfg.f_min) | (frac_c >= cfg.f_min))
+    keep = (inter > 0) & ((frac_t >= cfg.f_min) & (frac_c >= cfg.f_min))
     rows, cols = np.nonzero(keep)
     return sorted(Candidate(int(r), int(lids[c]), int(inter[r, c]), float(frac_t[r, c]),
                             float(frac_c[r, c])) for r, c in zip(rows, cols))
