@@ -9,6 +9,7 @@ Needs numpy, pandas, matplotlib. The raw MeteoNet data in DATA/ is only needed f
 import json
 import pickle
 import shutil
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +20,8 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
+from cell_dataset import raw_to_rate  # noqa: E402
 # Sorties committées des expériences passées, archivées (voir archive/)
 E0_RES = ROOT / "archive" / "E0_segmentation_tracking" / "results"
 E1_RES = ROOT / "archive" / "E1_fixed_vectors" / "results"
@@ -61,10 +64,13 @@ def save(fig, name):
     print("wrote", FIG / name)
 
 
+def rate_map(R):
+    """Taux (mm/h), NaN hors pluie ; conversion int32 (int16 déborde au-delà de 2730)."""
+    return np.where(R > 0, raw_to_rate(R), np.nan)
+
+
 # ---------------------------------------------------------------- 1. radar map + 1 mm/h cells
 def fig_radar_map():
-    import sys
-    sys.path.insert(0, str(ROOT / "src"))
     from datetime import datetime
     try:
         from cell_delimitation import load_frames, segment, MISSING
@@ -73,7 +79,7 @@ def fig_radar_map():
         print("skip radar map:", e)
         return
     R = data[0].astype(float)
-    rate = np.where(R > 0, R * 12 / 100, np.nan)
+    rate = rate_map(data[0])
     labels, n, valid = segment(data[0])
     area = np.bincount(labels.ravel())
     keep = np.isin(labels, np.nonzero(area >= 50)[0][1:])

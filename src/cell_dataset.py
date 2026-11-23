@@ -25,6 +25,11 @@ MOMENT_NAMES = ["log_area", "mean_rate", "max_rate", "log_sum_rate", "log_elong"
                 "fill_ratio", "hole_frac", "border"]
 
 
+def raw_to_rate(R):
+    """Brut MeteoNet (int16) -> mm/h ; int32 car R * 12 déborde int16 au-delà de 2730."""
+    return R.astype(np.int32) * 12 / 100
+
+
 def to_patch(field, mask):
     """Recadre sur la boîte englobante, complète en carré (centré), rééchantillonne en PATCH x PATCH."""
     h, w = field.shape
@@ -68,7 +73,7 @@ def build():
                 if area[lid] < MIN_AREA:
                     continue
                 mask = labels[sl] == lid
-                rate = np.where(mask, R[sl] * 12 / 100, 0).astype(np.float32)  # mm/h
+                rate = np.where(mask, raw_to_rate(R[sl]), 0).astype(np.float32)  # mm/h
                 border = (sl[0].start == 0 or sl[1].start == 0 or sl[0].stop == R.shape[0]
                           or sl[1].stop == R.shape[1] or near_missing[sl][mask].any())
                 patches.append(to_patch(rate, mask))
