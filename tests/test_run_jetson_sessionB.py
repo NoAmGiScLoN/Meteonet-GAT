@@ -115,6 +115,13 @@ def test_c050_rerun_uses_half_compression_and_skips_largest_class(name: str) -> 
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("name", ["0_smoke", "1_adaptive_2016", "3_floor256", "2_adaptive_2017"])
+def test_archived_first_run_stages_pin_compression_025(name: str) -> None:
+    # Le défaut est passé à 0.5 (D24) : les étapes archivées doivent rester reproductibles et reprenables
+    assert "--compression-frac 0.25" in calls_by_stage()[name]
+
+
+@pytest.mark.integration
 def test_stage_dispatch_and_summary_cover_c050_runs() -> None:
     text = script_text()
     assert "5) stage_5 ;;" in text and "6) stage_6 ;;" in text

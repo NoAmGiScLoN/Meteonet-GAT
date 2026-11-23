@@ -150,7 +150,8 @@ def test_invalid_config_raises(kw):
 @pytest.mark.unit
 def test_default_config_values():
     cfg = af.AdaptiveConfig()
-    assert (cfg.arm, cfg.target, cfg.k_cap, cfg.compression_frac, cfg.prune_frac) == ("diff7", 0.1, 128, 0.25, 0.01)
+    # D24 : compression 0.5 (0.25 bloquait les 50-200 px à K≈2)
+    assert (cfg.arm, cfg.target, cfg.k_cap, cfg.compression_frac, cfg.prune_frac) == ("diff7", 0.1, 128, 0.5, 0.01)
 
 
 @pytest.mark.unit

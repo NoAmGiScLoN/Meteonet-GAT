@@ -38,7 +38,7 @@ def test_parser_defaults():
     args = ar.build_parser().parse_args(["--sample", "s", "--out", "o"])
     assert args.target == ar.TARGET_DEFAULT
     assert args.k_cap == 128
-    assert args.compression_frac == 0.25
+    assert args.compression_frac == 0.5  # D24
     assert args.prune_frac == 0.01
     assert args.bins == [b[0] for b in vsf.BINS]
     assert args.iters is None and args.largest is None and args.max_per_bin is None

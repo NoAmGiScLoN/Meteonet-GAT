@@ -9,6 +9,7 @@
 #   6. 2017, compression 0.5 (~1,5-2 h) : idem sur sample_40_2017
 # Total des étapes par défaut (0 1 3 2 4) : 6-12,6 h ; les étapes 5 et 6 (relance compression 0.5) ne sont pas
 # dans STAGES par défaut : STAGES="5 6 4" (~3-4 h). Une étape qui échoue n'arrête pas les suivantes ; le bilan s'affiche à la fin.
+# Étapes 0-3 : compression 0.25 explicite (premier run archivé ; défaut 0.5 depuis D24).
 # Reprenable : relancer la même commande (--resume saute les cellules faites) ; p. ex. STAGES="2 4" pour finir 2017.
 # Usage (depuis la racine du dépôt, sur le Jetson) :
 #   mkdir -p results/07_sessionB/logs && STAGES="0 1 3 2 4" PY=~/gatenv/bin/python nohup bash scripts/run_jetson_sessionB.sh > results/07_sessionB/logs/run.log 2>&1 &
@@ -86,7 +87,7 @@ run() {  # run <nom> <commande...>
 
 stage_0() {
     prep "$OUT/smoke"
-    run 0_smoke "$PY" src/adaptive_run.py --sample "$SRC/sample_40.pkl" --max-per-bin 1 --iters 5 --k-cap 16 \
+    run 0_smoke "$PY" src/adaptive_run.py --sample "$SRC/sample_40.pkl" --max-per-bin 1 --iters 5 --k-cap 16 --compression-frac 0.25 \
                 --overwrite --device "$DEV" --out "$OUT/smoke"
     echo "--- secondes par vague et par cellule, par classe (smoke)"
     SMOKE_DIR="$OUT/smoke" "$PY" - <<'PYEOF' || echo "Résumé du smoke échoué."
@@ -105,19 +106,19 @@ PYEOF
 
 stage_1() {
     prep "$OUT/adaptive_2016"
-    run 1_adaptive_2016 "$PY" src/adaptive_run.py --sample "$SRC/sample_40.pkl" --k-cap 128 --resume \
+    run 1_adaptive_2016 "$PY" src/adaptive_run.py --sample "$SRC/sample_40.pkl" --k-cap 128 --compression-frac 0.25 --resume \
                         --device "$DEV" --out "$OUT/adaptive_2016"
 }
 
 stage_3() {
     prep "$OUT/floor256"
-    run 3_floor256 "$PY" src/adaptive_run.py --sample "$SRC/sample_40.pkl" --largest 10 --k-cap 256 --resume \
+    run 3_floor256 "$PY" src/adaptive_run.py --sample "$SRC/sample_40.pkl" --largest 10 --k-cap 256 --compression-frac 0.25 --resume \
                    --device "$DEV" --out "$OUT/floor256"
 }
 
 stage_2() {
     prep "$OUT/adaptive_2017"
-    run 2_adaptive_2017 "$PY" src/adaptive_run.py --sample "$SRC/sample_40_2017.pkl" --k-cap 128 --resume \
+    run 2_adaptive_2017 "$PY" src/adaptive_run.py --sample "$SRC/sample_40_2017.pkl" --k-cap 128 --compression-frac 0.25 --resume \
                         --device "$DEV" --out "$OUT/adaptive_2017"
 }
 
