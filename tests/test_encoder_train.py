@@ -189,3 +189,15 @@ def test_sigterm_writes_checkpoint_and_stops_cleanly(make_cfg, monkeypatch):
     assert signal.getsignal(signal.SIGTERM) == before
     monkeypatch.setattr(encoder_train, "append_row", real)
     assert train(replace(cfg, max_steps=3), resume=True).step == 3
+
+
+@pytest.mark.unit
+def test_train_csv_logs_the_size_class_of_each_batch(make_cfg):
+    # Arrange
+    cfg = make_cfg(max_steps=4)
+    # Act
+    train(cfg)
+    # Assert
+    log = _train_csv(cfg)
+    assert "bin" in log.columns and len(log) > 0
+    assert log["bin"].astype(str).str.len().gt(0).all()

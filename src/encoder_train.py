@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_LUT_DIR = Path(__file__).resolve().parent.parent / "results" / "03_variable_sources"
 TRAIN_COLUMNS = ["step", "epoch", "lr", "loss", "recon", "sparsity", "binarise", "heatmap", "k_active",
-                 "params_per_area", "px_per_s", "ms_step", "data_ms", "data_wait_ms", "render_ms", "n_chunks", "peak_mem_mb"]
+                 "params_per_area", "px_per_s", "ms_step", "data_ms", "data_wait_ms", "render_ms", "n_chunks", "peak_mem_mb", "bin"]
 MUTABLE_KEYS = frozenset({"epochs", "max_steps", "device", "out", "shards", "lut_dir", "checkpoint_every_min",
                           "log_every", "val_every_steps", "prefetch_depth", "render_px_budget"})
 STOP_SIGNALS = (signal.SIGTERM, signal.SIGINT)
@@ -136,7 +136,8 @@ def _log_row(cfg, path, step, epoch, lr, stats, item, wait_ms, dt, batch, device
                       "k_active": stats.k_active, "params_per_area": stats.params_per_area, "px_per_s": px / dt,
                       "ms_step": 1000 * dt, "data_ms": item.data_ms, "data_wait_ms": wait_ms,
                       "render_ms": stats.render_ms, "n_chunks": stats.n_chunks,
-                      "peak_mem_mb": torch.cuda.max_memory_allocated(device) / 2 ** 20 if cuda else 0.0}, TRAIN_COLUMNS)
+                      "peak_mem_mb": torch.cuda.max_memory_allocated(device) / 2 ** 20 if cuda else 0.0,
+                      "bin": batch.meta[0]["bin"]}, TRAIN_COLUMNS)  # un lot = une classe de taille
     if cuda:
         torch.cuda.reset_peak_memory_stats(device)  # pic par fenêtre de journalisation
 
