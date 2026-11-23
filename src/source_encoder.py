@@ -136,7 +136,8 @@ class SourceEncoder(nn.Module):
         z = F.relu(self.context(torch.cat([z, z.mean((2, 3), keepdim=True).expand_as(z)], 1)))
         for block, skip in zip(self.up, reversed(skips[:-1])):
             z = block(torch.cat([F.interpolate(z, scale_factor=2, mode="nearest"), skip], 1))
-        h = self.head(z)
+        with torch.autocast(device_type=z.device.type, enabled=False):  # positions et rayons en fp32
+            h = self.head(z.float())
         return HeadOut(logits=h[:, 0:1], offsets=torch.tanh(h[:, 1:3]), raw_A=h[:, 3:4], raw_a=h[:, 4:5],
                        raw_b=h[:, 5:6], cos2t=h[:, 6:7], sin2t=h[:, 7:8], raw_w=h[:, 8:9])
 
