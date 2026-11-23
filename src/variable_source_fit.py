@@ -27,6 +27,8 @@ import logging
 import math
 import pickle
 import time
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -239,15 +241,18 @@ def metrics(rec, T, valid):
 
 
 # ------------------------------------------------------------------ ajustement d'un groupe de cellules
-def fit_group(cells, kind, kmax, iters, lut5, snap_k=(), rng=None, *, lr: float = LR_DEFAULT,
-              lr_schedule: str | None = None):
-    """kind : gauss | diffusion | diff_tau | diff_w | diff7.  rng : perturbation de l'initialisation (ou None).
-    lr / lr_schedule : taux Adam et planning (None | "cosine", relancé à chaque vague).
-    Retourne (enregistrements par K, images, paramètres finaux (B, kmax, P) et masque actif, sur CPU)."""
-    validate_lr(lr, lr_schedule)
-    check_lut_depth(kind, lut5)
-    rkind = "gauss" if kind == "gauss" else "diffusion"
-    frozen = ARM_FIXED.get(kind, [])
+@dataclass(frozen=True, eq=False)
+class Targets:
+    """Cibles d'un groupe de cellules, complétées par des zéros jusqu'à (Hm, Wm) ; valid marque les pixels réels."""
+    T: torch.Tensor
+    sT: torch.Tensor
+    valid: torch.Tensor
+    npix: torch.Tensor
+    Hm: int
+    Wm: int
+
+
+def make_targets(cells: Sequence[dict]) -> Targets:
     B = len(cells)
     Hm, Wm = max(c["rate"].shape[0] for c in cells), max(c["rate"].shape[1] for c in cells)
     T = torch.zeros(B, Hm, Wm, device=DEVICE)
@@ -256,57 +261,131 @@ def fit_group(cells, kind, kmax, iters, lut5, snap_k=(), rng=None, *, lr: float 
         h, w = c["rate"].shape
         T[b, :h, :w] = torch.from_numpy(c["rate"])
         valid[b, :h, :w] = True
-    sT = T.sqrt()
-    P = 6 if rkind == "gauss" else 8
+    return Targets(T=T, sT=T.sqrt(), valid=valid, npix=valid.sum((1, 2)), Hm=Hm, Wm=Wm)
+
+
+def render_kind(kind: str) -> str:
+    """Les helpers prennent `kind` (bras) : placement et colonnes gelées en dépendent ; le rendu utilise
+    ce profil : "gauss" pour gauss, "diffusion" pour tous les autres bras."""
+    return "gauss" if kind == "gauss" else "diffusion"
+
+
+def _check_slot_bounds(name: str, arr: np.ndarray, n_cells: int, capacity: int) -> None:
+    if not isinstance(arr, np.ndarray) or arr.shape != (n_cells,):
+        raise ValueError(f"{name} : tableau numpy de forme ({n_cells},) attendu")
+    if not np.issubdtype(arr.dtype, np.integer):
+        raise ValueError(f"{name} : dtype entier attendu, reçu {arr.dtype}")
+    if arr.min(initial=0) < 0 or arr.max(initial=0) > capacity:
+        raise ValueError(f"{name} : valeurs attendues dans [0, {capacity}]")
+
+
+def _check_place_inputs(params: torch.Tensor, active: torch.Tensor, n_cells: int,
+                        k_from: np.ndarray, k_to: np.ndarray) -> None:
+    """Valide bornes et précondition de contiguïté, sans rien modifier."""
+    capacity = params.shape[1]
+    _check_slot_bounds("k_from", k_from, n_cells, capacity)
+    _check_slot_bounds("k_to", k_to, n_cells, capacity)
+    expected = torch.arange(capacity, device=active.device)[None, :] < torch.as_tensor(
+        k_from, device=active.device)[:, None]
+    if not torch.equal(active > 0, expected):
+        raise ValueError("active doit être contigu par cellule : active[b, :k_from[b]] == 1 et "
+                         "active[b, k_from[b]:] == 0 (retasser après élagage)")
+
+
+def place_sources(params: torch.Tensor, active: torch.Tensor, targets: Targets, cells: Sequence[dict],
+                  k_from: np.ndarray, k_to: np.ndarray, kind: str, rng: np.random.Generator | None,
+                  lut5: torch.Tensor | None = None) -> None:
+    """Place, cellule par cellule, les sources k_from[b]..k_to[b]-1 aux maxima du résidu (rendu une fois au début).
+    Écrit EN PLACE dans params / active (exception documentée à l'immutabilité). Une cellule avec
+    k_to[b] <= k_from[b] est ignorée sans tirage rng. Ordre des tirages par cellule : jitter de rho, puis
+    par source x, y, theta, colonnes libres supplémentaires.
+    Précondition : active est contigu par cellule (active[b, :k_from[b]] == 1 et active[b, k_from[b]:] == 0) ;
+    l'appelant retasse après élagage. k_from, k_to : entiers numpy (B,), 0 <= valeurs <= params.shape[1].
+    Tout est validé (ValueError) avant la moindre écriture.
+    lut5 : table de profils, nécessaire au rendu du résidu dès que des sources actives existent (bras diffusion)."""
+    rkind, frozen, P = render_kind(kind), ARM_FIXED.get(kind, []), params.shape[-1]
+    _check_place_inputs(params, active, len(cells), k_from, k_to)
+    if rkind == "diffusion" and lut5 is None and bool((active > 0).any()):
+        raise ValueError(f"bras {kind} : table de profils requise pour rendre les sources déjà actives")
+    with torch.no_grad():
+        rec = render_windowed(params, active, targets.Hm, targets.Wm, rkind, lut5)
+        resid = ((targets.sT - (rec + EPS).sqrt()) * targets.valid).cpu().numpy()
+        pos = (targets.T - rec).clamp(min=0).cpu().numpy()
+    for b in range(len(cells)):
+        k0, K = int(k_from[b]), int(k_to[b])
+        if K <= k0:
+            continue
+        res = resid[b].copy()
+        # rayon initial : disque d'aire = aire de la cellule / K (même règle pour les deux bras ;
+        # sigma gaussien = moitié du rayon du disque)
+        rho = float(np.clip(0.7 * math.sqrt(cells[b]["area"] / (math.pi * K)), 2.0, 40.0))
+        if rng is not None:
+            rho *= float(rng.uniform(0.8, 1.2))
+        r0 = inv_softplus(max((0.5 * rho if kind == "gauss" else rho) - 0.5, 0.1))
+        sup = max(int(rho), 2)  # pas deux nouvelles sources à moins de rho pixels
+        for k in range(k0, K):
+            y, x = np.unravel_index(np.argmax(res), res.shape)
+            init = [x, y, inv_softplus(max(float(pos[b, y, x]), 0.5)), r0, r0, 0, 0, 0][:P]
+            if rng is not None:
+                init[0] += float(rng.uniform(-1.5, 1.5))
+                init[1] += float(rng.uniform(-1.5, 1.5))
+                init[5] = float(rng.uniform(0, math.pi))
+                for col in (6, 7)[:P - 6]:
+                    if col not in frozen:
+                        init[col] = float(rng.normal(0, 0.5))
+            params[b, k] = torch.tensor(init, device=DEVICE)
+            active[b, k] = 1
+            res[max(y - sup, 0):y + sup + 1, max(x - sup, 0):x + sup + 1] = -1e9
+
+
+def optimise(params: torch.Tensor, active: torch.Tensor, targets: Targets, kind: str,
+             lut5: torch.Tensor | None, iters: int, *, lr: float, lr_schedule: str | None) -> torch.Tensor:
+    """Adam frais + planning par appel ; colonnes gelées (ARM_FIXED) sans gradient. Retourne les paramètres détachés
+    (params n'est pas modifié)."""
+    rkind, frozen = render_kind(kind), ARM_FIXED.get(kind, [])
+    params = params.detach().clone().requires_grad_(True)
+    opt = torch.optim.Adam([params], lr=lr)
+    sched = make_scheduler(opt, lr_schedule, iters, lr)
+    for _ in range(iters):
+        rec = render_windowed(params, active, targets.Hm, targets.Wm, rkind, lut5)
+        loss = ((((rec.clamp(min=0) + EPS).sqrt() - targets.sT) ** 2) * targets.valid).sum((1, 2)) / targets.npix
+        opt.zero_grad()
+        loss.sum().backward()
+        for col in frozen:
+            params.grad[..., col] = 0
+        opt.step()
+        if sched is not None:
+            sched.step()
+    return params.detach()
+
+
+def evaluate(params: torch.Tensor, active: torch.Tensor, targets: Targets, kind: str,
+             lut5: torch.Tensor | None) -> tuple[torch.Tensor, list[dict]]:
+    """Retourne (image reconstruite (B, Hm, Wm), métriques par cellule)."""
+    with torch.no_grad():
+        rec = render_windowed(params, active, targets.Hm, targets.Wm, render_kind(kind), lut5)
+    return rec, metrics(rec, targets.T, targets.valid)
+
+
+def fit_group(cells, kind, kmax, iters, lut5, snap_k=(), rng=None, *, lr: float = LR_DEFAULT,
+              lr_schedule: str | None = None):
+    """kind : gauss | diffusion | diff_tau | diff_w | diff7.  rng : perturbation de l'initialisation (ou None).
+    lr / lr_schedule : taux Adam et planning (None | "cosine", relancé à chaque vague).
+    Retourne (enregistrements par K, images, paramètres finaux (B, kmax, P) et masque actif, sur CPU)."""
+    validate_lr(lr, lr_schedule)
+    check_lut_depth(kind, lut5)
+    B = len(cells)
+    targets = make_targets(cells)
+    P = 6 if render_kind(kind) == "gauss" else 8
     params = torch.zeros(B, kmax, P, device=DEVICE)
     active = torch.zeros(B, kmax, device=DEVICE)
     k_cur, records, snaps = 0, [], {}
     for K in [k for k in SCHEDULE if k <= kmax]:
-        with torch.no_grad():
-            rec = render_windowed(params, active, Hm, Wm, rkind, lut5)
-            resid = ((sT - (rec + EPS).sqrt()) * valid).cpu().numpy()
-            pos = (T - rec).clamp(min=0).cpu().numpy()
-        for b in range(B):  # nouvelles sources aux maxima du résidu
-            res = resid[b].copy()
-            # rayon initial : disque d'aire = aire de la cellule / K (même règle pour les deux bras ;
-            # sigma gaussien = moitié du rayon du disque)
-            rho = float(np.clip(0.7 * math.sqrt(cells[b]["area"] / (math.pi * K)), 2.0, 40.0))
-            if rng is not None:
-                rho *= float(rng.uniform(0.8, 1.2))
-            r0 = inv_softplus(max((0.5 * rho if kind == "gauss" else rho) - 0.5, 0.1))
-            sup = max(int(rho), 2)  # pas deux nouvelles sources à moins de rho pixels
-            for k in range(k_cur, K):
-                y, x = np.unravel_index(np.argmax(res), res.shape)
-                init = [x, y, inv_softplus(max(float(pos[b, y, x]), 0.5)), r0, r0, 0, 0, 0][:P]
-                if rng is not None:
-                    init[0] += float(rng.uniform(-1.5, 1.5))
-                    init[1] += float(rng.uniform(-1.5, 1.5))
-                    init[5] = float(rng.uniform(0, math.pi))
-                    for col in (6, 7)[:P - 6]:
-                        if col not in frozen:
-                            init[col] = float(rng.normal(0, 0.5))
-                params[b, k] = torch.tensor(init, device=DEVICE)
-                active[b, k] = 1
-                res[max(y - sup, 0):y + sup + 1, max(x - sup, 0):x + sup + 1] = -1e9
+        place_sources(params, active, targets, cells, np.full(B, k_cur), np.full(B, K), kind, rng, lut5)
         k_cur = K
-        params.requires_grad_(True)
-        opt = torch.optim.Adam([params], lr=lr)
-        sched = make_scheduler(opt, lr_schedule, iters, lr)
-        npix = valid.sum((1, 2))
-        for _ in range(iters):
-            rec = render_windowed(params, active, Hm, Wm, rkind, lut5)
-            loss = ((((rec.clamp(min=0) + EPS).sqrt() - sT) ** 2) * valid).sum((1, 2)) / npix
-            opt.zero_grad()
-            loss.sum().backward()
-            for col in frozen:
-                params.grad[..., col] = 0
-            opt.step()
-            if sched is not None:
-                sched.step()
-        params = params.detach()
-        with torch.no_grad():
-            rec = render_windowed(params, active, Hm, Wm, rkind, lut5)
-        for b, mt in enumerate(metrics(rec, T, valid)):
+        params = optimise(params, active, targets, kind, lut5, iters, lr=lr, lr_schedule=lr_schedule)
+        rec, mets = evaluate(params, active, targets, kind, lut5)
+        for b, mt in enumerate(mets):
             records.append(dict(cell=cells[b]["id"], bin=cells[b]["bin"], area=cells[b]["area"], arm=kind,
                                 K=K, n_params=K * ARM_NPAR[kind], **mt))
         if K in snap_k:

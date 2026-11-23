@@ -15,6 +15,8 @@ archive/**/diffusion_profiles*.pt
 archive/**/sample_*.pkl
 archive/**/stability_pairs_*.pkl
 archive/**/cells.npz
+# per-cell source files of adaptive_run (resume only): merged into sources.pkl
+archive/**/sources/*.pkl
 
 # Exported sample grids (tools/export_excel.py)
 tools/samples/*.xlsx

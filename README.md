@@ -626,6 +626,9 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
 | D20 | Keep the fixed learning rate 0.05 (no decaying schedule) | Cosine decay per wave is worse by 0.004–0.017 at equal cost in every class | 9 | [E4 report](archive/E4_optimizer_stability_floor/report.md) |
 | D21 | Adaptive-K target nrmse ≤ 0.1 in every class | Quantization floor ≤ 0.013 and interior texture floor 0.015–0.10, all below 0.1 | 9 | [E4 report](archive/E4_optimizer_stability_floor/report.md) |
 | D22 | 500 iterations per wave from 200 px upward, 200 below (revises D19) | 200 → 500 gain on 200–1,000 px is 0.005 (E3) and 0.007 (E4) on the same cells; run-to-run noise ≈ 0.005 | 9 | [E4 report](archive/E4_optimizer_stability_floor/report.md) |
+| D23 | Adaptive K is the default fitter: sources added wave by wave until nrmse ≤ 0.1, cap or compression limit; pruning at 1 % of the cell peak | Beats fixed K per class by 0.03–0.06 on ≥ 1,000 px cells and matches it on 200–1,000 px, in 2016 and 2017 | 9 | [E5 report](archive/E5_adaptive_k/report.md) |
+| D24 | Compression limit n_params ≤ 0.5 × area in every class | 0.25 held 50–200 px cells at K ≈ 2 (nrmse 0.26); 0.5 brings them to 0.16–0.17, an accepted trade since small cells weigh little in the global movement | 9 | [E5 report](archive/E5_adaptive_k/report.md) |
+| D25 | Keep the cap at 128 sources per cell | Cap 256 brings the 10 largest cells from 0.136 to 0.098 but was not adopted; ≥ 5,000 px stays at 0.110 (2016) / 0.137 (2017) | 9 | [E5 report](archive/E5_adaptive_k/report.md) |
 
 **Node layout under consideration** (panel ④ of the pipeline figure in §1.2):
 
@@ -660,7 +663,11 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
    - sources at the sharpest `w` (11–50 %) increase with optimisation effort (E4), so the pile-up is not a
      convergence artefact; whether sharper edges are wanted is open.
    - iteration counts are now 200 below 200 px and 500 above (D22).
-2. **Choose K per cell from a target error** instead of a cap per size bin. Median parameters to reach 0.15:
+2. ~~**Choose K per cell from a target error**~~ Done: adaptive K (D23–D25, [E5 report](archive/E5_adaptive_k/report.md)). Median nrmse 0.16–0.17 /
+   0.09–0.10 / 0.09 / 0.11–0.14 by class; the ≥ 5,000 px class stops at the cap 128 in 70–80 % of cells, and cap 256
+   (0.098 on the largest cells) is the measured option if large-cell fidelity matters for the GAT. The figures below are
+   the E3 estimates that motivated it.
+   Previously: choose K per cell from a target error instead of a cap per size bin. Median parameters to reach 0.15:
    - 16–48 for small cells;
    - ~96 for medium cells;
    - ~256 for 1,000–5,000 px;
@@ -704,12 +711,16 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
 │   ├── optim_schedule.py          # learning rate and optional cosine schedule (E4)
 │   ├── optimizer_check.py         # optimizer settings grid with w pile-up (E4)
 │   ├── noise_floor.py             # quantization and texture floors of the nrmse (E4)
+│   ├── adaptive_fit.py            # adaptive K per cell: waves, target, cap, compression, pruning (E5, D23–D25)
+│   ├── adaptive_run.py            # adaptive-K CLI: resumable per-cell outputs, sources, summaries (E5)
+│   ├── residual_stats.py          # per-cell residual statistics: biases, interior/edge spread, spill, spectrum (E5)
 │   └── stability_test.py          # Experiment 2, temporal stability                  → results/04/stability
 ├── scripts/
 │   ├── build_samples.py           # rebuilds the non-versioned inputs from DATA/ (--logw: diff7 tables)
 │   ├── run_jetson.sh              # the 7-step GPU session (Section 7.4)
 │   ├── run_jetson_diff7.sh        # the E3 GPU session (diff7, w tables, convergence)
 │   ├── run_jetson_sessionA.sh     # the E4 GPU session (optimizer grid, diff7 stability)
+│   ├── run_jetson_sessionB.sh     # the E5 GPU session (adaptive K, floor test, compression 0.5 rerun)
 │   ├── make_figures.py            # result figures of this report → docs/figures/
 │   └── pipeline_figure.py         # pipeline overview figure (§1.2) → docs/figures/00_pipeline.png
 ├── tests/                         # pytest: archive layout, figure inputs (unit and integration markers)
@@ -724,7 +735,8 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
 │       ├── 01_cpu_prelim/         # results/, report.md (CPU preliminary run)
 │   │   └── 02_jetson_baseline/    # results/, report.md (full Jetson programme)
 │   ├── E3_diff7_convergence/      # results/, report.md (diff7, w tables, iterations per wave; tag v1-diff7-convergence)
-│   └── E4_optimizer_stability_floor/ # results/, report.md (lr schedule, diff7 stability, noise floor; tag v2-sessionA)
+│   ├── E4_optimizer_stability_floor/ # results/, report.md (lr schedule, diff7 stability, noise floor; tag v2-sessionA)
+│   └── E5_adaptive_k/             # results/, report.md (adaptive K, compression, cap; tag v3-sessionB)
 └── results/                       # git-ignored: rebuildable inputs + new runs (see results/README.md)
     ├── 01_segmentation_tracking/  # new runs (archived outputs: archive/E0_segmentation_tracking/)
     ├── 02_fixed_vector_benchmark/ # input cells.npz; new runs

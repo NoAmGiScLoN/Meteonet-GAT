@@ -1,0 +1,9 @@
+{
+  "target": 0.1,
+  "k_cap": 128,
+  "compression_frac": 0.5,
+  "prune_frac": 0.01,
+  "iters": null,
+  "lut": "ace17c5890",
+  "arm": "diff7"
+}

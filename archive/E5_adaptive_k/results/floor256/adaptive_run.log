@@ -1,0 +1,26 @@
+2026-11-23 01:52:58,231 INFO log-w table loaded: results/07_sessionB/floor256/diffusion_profiles_logw_ace17c5890.pt (key ace17c5890)
+2026-11-23 01:52:58,316 INFO classe >=5000 : 10 cellules a ajuster (0 deja faites)
+2026-11-23 01:53:02,588 INFO echauffement GPU (classe >=5000, cellule 125) : 4.3 s — resultat ignore
+2026-11-23 02:06:06,704 INFO cellule 127 : arret target a K=179 (nrmse 0.088)
+2026-11-23 02:07:21,736 INFO cellule 125 : arret target a K=252 (nrmse 0.095)
+2026-11-23 02:07:21,812 INFO cellule 131 : arret cap a K=232 (nrmse 0.151)
+2026-11-23 02:07:21,850 INFO cellule 132 : arret cap a K=256 (nrmse 0.104)
+2026-11-23 02:07:21,917 INFO classe >=5000 groupe 0 : 4 cellules, 859.3 s, 53.69 s/vague, pic 331266560 o
+2026-11-23 02:21:46,367 INFO cellule 144 : arret target a K=117 (nrmse 0.095)
+2026-11-23 02:24:16,753 INFO cellule 133 : arret cap a K=192 (nrmse 0.146)
+2026-11-23 02:24:16,816 INFO cellule 142 : arret cap a K=242 (nrmse 0.100)
+2026-11-23 02:24:16,868 INFO cellule 147 : arret target a K=256 (nrmse 0.088)
+2026-11-23 02:24:16,926 INFO classe >=5000 groupe 1 : 4 cellules, 1015.0 s, 63.42 s/vague, pic 339635200 o
+2026-11-23 02:36:05,592 INFO cellule 152 : arret target a K=247 (nrmse 0.094)
+2026-11-23 02:36:05,672 INFO cellule 154 : arret cap a K=216 (nrmse 0.136)
+2026-11-23 02:36:05,730 INFO classe >=5000 groupe 2 : 2 cellules, 708.8 s, 44.29 s/vague, pic 167388160 o
+2026-11-23 02:36:05,791 INFO synthese stop
+   bin  n  share_target  share_cap  share_compression  share_diverged
+>=5000 10           0.5        0.5                0.0             0.0
+2026-11-23 02:36:05,801 INFO synthese k
+   bin  n  K_median  K_q25  K_q75  slope_logK_logarea
+>=5000 10     237.0  198.0 250.75            0.242037
+2026-11-23 02:36:05,813 INFO synthese error
+   bin  n  n_diverged  nrmse_median  nrmse_p90  share_target_reached  compression_ratio_median  mass_bias_median  peak_bias_median
+>=5000 10           0      0.097759   0.146885                   0.5                  0.061012          -0.01084         -0.045744
+2026-11-23 02:36:05,813 INFO 10 cellules, duree totale 2587.5 s
