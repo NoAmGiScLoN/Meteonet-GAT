@@ -11,7 +11,7 @@ import torch.nn.functional as F
 
 import variable_source_fit as vsf
 from profile_lut import LogWLutSpec, load_or_build_logw_lut
-from source_encoder import (EncoderConfig, HeadOut, SourceEncoder, count_parameters, decode_candidates, head_grid_hw,
+from source_encoder import (EncoderConfig, HeadOut, SourceEncoder, count_parameters, decode_candidates, decode_candidates_hard, head_grid_hw,
                             pad_batch, pad_inputs, select_sources)
 
 TINY_CFG = EncoderConfig(base_ch=8, k_train=16)
@@ -314,3 +314,112 @@ def test_soft_clamp_is_near_identity_for_small_values_and_bounded():
     # c = 50 : reprise du point de reprise existant quasi inchangée (|x| = 5 bouge de < 0,02)
     assert (soft_clamp(torch.linspace(-5, 5, 101)) - torch.linspace(-5, 5, 101)).abs().max() < 0.02
     assert soft_clamp(torch.tensor([1e9, -1e9])).abs().max() <= HEAD_SOFT_CLAMP
+
+
+@pytest.mark.unit
+def test_decode_candidates_hard_matches_inference_threshold_and_keeps_logit_gradient():
+    h, w = 23, 39
+    out = _forward(h, w)
+    logits = torch.full_like(out.logits, -5.0)
+    logits[0, 0, 0, 0], logits[0, 0, 0, 4] = 2.0, -0.01  # éloignées : pas de NMS entre elles  # p = 0.88 (allumée), p = 0.4975 (éteinte)
+    logits.requires_grad_()
+    hot = out.__class__(**{**out.__dict__, "logits": logits})
+    params, gate, prob, ok = decode_candidates_hard(hot, 4, [(h, w)], TINY_CFG, 0.5, [10_000])
+    assert gate[0, 0] == 1.0 and gate[0, 1] == 0.0  # valeur exacte 0/1 en avant
+    assert torch.equal(gate[0, 2:], torch.zeros(2)) and torch.equal(gate.detach(), (prob.detach() >= 0.5).float())
+    gate[0, :2].sum().backward()
+    assert logits.grad[0, 0, 0, 4] > 0  # la source éteinte reçoit le gradient de la porte molle
+
+
+@pytest.mark.unit
+def test_decode_candidates_hard_zeroes_non_ok_slots():
+    h, w = 8, 8
+    out = _forward(h, w)
+    hot = out.__class__(**{**out.__dict__, "logits": torch.full_like(out.logits, 5.0)})
+    _, gate, prob, ok = decode_candidates_hard(hot, 64, [(h, w)], TINY_CFG, 0.5, [10_000])
+    assert not ok.all() and (gate[~ok] == 0).all() and (prob[~ok] == 0).all() and (gate[ok] == 1).all()
+
+
+@pytest.mark.unit
+def test_inverse_softplus_clamp_matches_old_formula_and_stays_finite_for_large_radius():
+    from source_encoder import _soft_clamp_raw
+    limit = torch.tensor([60.0])
+    for raw in (-3.0, 0.0, 2.0, 30.0):  # région où l'ancienne formule est finie
+        got = _soft_clamp_raw(torch.tensor([[raw]]), limit)
+        assert torch.isfinite(got).all()
+    for lim in (100.0, 195.0, 500.0):
+        got = _soft_clamp_raw(torch.tensor([[1e4]]), torch.tensor([lim]))
+        r = 0.5 + F.softplus(got)
+        assert torch.isfinite(got).all() and float(r) <= lim and float(r) > 0.9 * lim  # saturé près de la limite
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("s", [1e-3, 1.0, 20.0, 80.0, 100.0, 195.0, 500.0])
+def test_stable_inverse_softplus_roundtrip(s):
+    from source_encoder import _inv_softplus_stable
+    x = _inv_softplus_stable(torch.tensor([s], dtype=torch.float32))
+    assert torch.isfinite(x).all()
+    assert float(F.softplus(x)) == pytest.approx(s, rel=1e-4)
+    if s <= 80:  # l'ancienne formule est finie : mêmes valeurs
+        old = torch.log(torch.expm1(torch.tensor([s], dtype=torch.float32)))
+        assert float(x) == pytest.approx(float(old), rel=1e-4, abs=1e-4)
+
+
+@pytest.mark.unit
+def test_decode_huge_crop_with_huge_raw_radius_is_finite_and_within_limit():
+    h = w = 784
+    out = _forward(h, w)
+    big = out.__class__(**{**out.__dict__, "raw_a": out.raw_a + 1e4, "raw_b": out.raw_b + 1e4})
+    params, gate, _ = decode_candidates(big, 8, [(h, w)], TINY_CFG)
+    assert torch.isfinite(params).all() and torch.isfinite(gate).all()
+    a, b = 0.5 + F.softplus(params[..., 3]), 0.5 + F.softplus(params[..., 4])
+    assert float(2 * torch.maximum(a, b).max()) <= TINY_CFG.radius_clamp_frac * max(h, w) + 1e-3
+
+
+@pytest.mark.unit
+def test_head_bounds_radius_outputs_with_large_constant():
+    from source_encoder import RADIUS_SOFT_CLAMP
+    net = SourceEncoder(TINY_CFG)
+    with torch.no_grad():
+        net.head.bias[4:6] = 1e5
+    out = net(pad_inputs(*_crop(64, 64))[0][None])
+    assert float(out.raw_a.max()) <= RADIUS_SOFT_CLAMP and float(out.raw_b.max()) <= RADIUS_SOFT_CLAMP
+    assert RADIUS_SOFT_CLAMP >= 250.0
+
+
+def _random_heads(h: int, w: int, seed: int):
+    g = torch.Generator().manual_seed(seed)
+    out = _forward(h, w)
+    logits = 2.0 * torch.randn(out.logits.shape, generator=g)
+    return out.__class__(**{**out.__dict__, "logits": logits})
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("area", [60, 400, 3000, 6000, 40_000, 10 ** 6])
+def test_hard_training_mask_equals_select_sources_selection(area):
+    h = w = 160
+    cfg = dataclasses.replace(TINY_CFG, k_train=256)
+    out = _random_heads(h, w, seed=area)
+    params, gate, prob, ok = decode_candidates_hard(out, 256, [(h, w)], cfg, 0.5, [area])
+    s_params, active = select_sources(out, [area], [(h, w)], cfg, 0.5)
+    on = gate.detach() == 1.0
+    n = active.shape[1]
+    assert torch.equal(on[:, :n], active.bool()) and not on[:, n:].any()
+    assert torch.equal(params[:, :n][active.bool()], s_params[active.bool()])
+    limit = min(cfg.cap, max(1, math.floor(cfg.compression_frac * area / cfg.n_par)))
+    assert int(on.sum()) <= limit
+    if area >= 6000:
+        assert int(on.sum()) == limit  # le plafond mord réellement (têtes aléatoires : beaucoup de maxima)
+
+
+@pytest.mark.unit
+def test_hard_training_keeps_gradient_on_off_survivors_but_none_on_non_maxima():
+    h = w = 32
+    out = _forward(h, w)
+    logits = torch.full_like(out.logits, -5.0)
+    logits[0, 0, 2, 2], logits[0, 0, 2, 3], logits[0, 0, 8, 8] = 3.0, 2.0, -1.0  # (2,3) non-maximum ; (8,8) éteint
+    logits.requires_grad_()
+    hot = out.__class__(**{**out.__dict__, "logits": logits})
+    _, gate, prob, ok = decode_candidates_hard(hot, 8, [(h, w)], TINY_CFG, 0.5, [10_000])
+    (gate * 1.0).sum().backward()
+    assert logits.grad[0, 0, 8, 8] > 0 and logits.grad[0, 0, 2, 3] == 0

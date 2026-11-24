@@ -91,6 +91,15 @@ def load_checkpoint(out: Path) -> dict[str, Any]:
     raise FileNotFoundError(f"aucun point de reprise lisible dans {out}")
 
 
+def load_model_weights(path: Path) -> dict[str, Any]:
+    """Poids du modèle seuls d'un point de reprise (format best.pt ou last.pt : clé "model") ; rien d'autre n'est repris
+    (optimiseur, planificateur, pas et états aléatoires restent neufs)."""
+    ck = torch.load(Path(path), map_location="cpu", weights_only=False)
+    if not isinstance(ck, Mapping) or "model" not in ck:
+        raise ValueError(f"{path} n'est pas un point de reprise de l'encodeur (clé 'model' absente)")
+    return ck["model"]
+
+
 def check_run_config(out: Path, config: Mapping[str, Any], resume: bool, mutable: Collection[str]) -> None:
     """Écrit run_config.json au premier lancement ; à la reprise refuse tout changement hors `mutable`
     (le fichier est alors mis à jour avec les valeurs mutables courantes)."""

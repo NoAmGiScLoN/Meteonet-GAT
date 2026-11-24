@@ -407,3 +407,73 @@ def test_resume_keeps_cumulative_n_skipped(make_cfg, monkeypatch):
     train(replace(cfg, max_steps=5), resume=True)
     log = _train_csv(cfg)
     assert log["step"].tolist() == [2, 3, 4, 5] and log["n_skipped"].tolist() == [1, 1, 1, 1]
+
+
+# ------------------------------------------------------------------ démarrage à chaud, porte dure, échauffement progressif
+@pytest.mark.unit
+@pytest.mark.parametrize("ckpt_name", ["best.pt", "last.pt"])
+def test_init_from_loads_weights_only(make_cfg, tmp_path, ckpt_name):
+    src = make_cfg(out=tmp_path / "src", max_steps=3)
+    train(src)
+    saved = torch.load(src.out / ckpt_name, weights_only=False)
+    cfg = make_cfg(out=tmp_path / "warm", max_steps=1, init_from=src.out / ckpt_name, warmup_epochs=0, lr=1e-12)
+    train(cfg)
+    loaded = torch.load(cfg.out / "last.pt", weights_only=False)
+    for key, value in saved["model"].items():
+        assert torch.allclose(loaded["model"][key], value, atol=1e-6)  # lr ~ 0 : poids = ceux du point source
+    assert loaded["step"] == 1  # compteur de pas neuf, pas celui du point source
+    assert loaded["epoch"] == 0
+    assert json.loads((cfg.out / "run_config.json").read_text())["init_from"] == str(src.out / ckpt_name)
+
+
+@pytest.mark.unit
+def test_init_from_missing_file_fails_before_training(make_cfg, tmp_path):
+    with pytest.raises(FileNotFoundError):
+        train(make_cfg(init_from=tmp_path / "absent.pt"))
+
+
+@pytest.mark.unit
+def test_init_from_is_ignored_on_resume(make_cfg, tmp_path):
+    src = make_cfg(out=tmp_path / "src", max_steps=2)
+    train(src)
+    cfg = make_cfg(out=tmp_path / "warm", max_steps=2, init_from=src.out / "best.pt")
+    train(cfg)
+    assert train(replace(cfg, max_steps=4), resume=True).step == 4
+
+
+@pytest.mark.unit
+def test_train_csv_logs_hard_count_and_gate_median(make_cfg):
+    cfg = make_cfg(max_steps=3)
+    train(cfg)
+    log = _train_csv(cfg)
+    assert {"k_active_hard", "gate_median"} <= set(log.columns)
+    assert log["k_active_hard"].notna().all() and log["gate_median"].between(0, 1).all()
+
+
+@pytest.mark.unit
+def test_hard_gate_starts_after_warmup_with_configurable_threshold(make_cfg, monkeypatch):
+    seen = []
+    real = encoder_step.accumulate_step
+
+    def spy(model, *a, **k):
+        seen.append((k["gate_threshold"], k["heat_scale"]))
+        return real(model, *a, **k)
+    monkeypatch.setattr(encoder_train, "accumulate_step", spy)
+    train(make_cfg(max_steps=6, gate_threshold=0.4))  # 3 lots par époque, échauffement = 1 époque
+    assert [t for t, _ in seen[:3]] == [None] * 3 and [t for t, _ in seen[3:]] == [0.4] * 3
+    assert [h for _, h in seen[:3]] == pytest.approx([1.0, 2 / 3, 1 / 3]) and [h for _, h in seen[3:]] == [0.0] * 3
+
+
+@pytest.mark.unit
+def test_cli_exposes_init_from_and_warmup_epochs():
+    args = build_parser().parse_args(["--shards", "s", "--out", "o", "--init-from", "w.pt", "--warmup-epochs", "0",
+                                      "--gate-threshold", "0.4"])
+    cfg = encoder_train.config_from_args(args)
+    assert cfg.init_from == encoder_train.Path("w.pt") and cfg.warmup_epochs == 0 and cfg.gate_threshold == 0.4
+    assert encoder_train.config_from_args(build_parser().parse_args(["--shards", "s", "--out", "o"])).init_from is None
+
+
+@pytest.mark.unit
+def test_gate_threshold_must_be_a_probability(make_cfg):
+    with pytest.raises(ValueError):
+        make_cfg(gate_threshold=1.0)

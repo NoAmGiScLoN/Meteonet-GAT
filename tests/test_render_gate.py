@@ -97,3 +97,30 @@ def test_gradient_is_zero_at_zero_gate_and_positive_above():
     vsf.render_windowed(p, a, H, W, "gauss").sum().backward()
     assert a.grad[0, 0] == 0  # source sautée : pas de gradient (plancher positif requis pour apprendre)
     assert a.grad[0, 1] > 0
+
+
+# ------------------------------------------------------------------ evaluate_zero (porte dure à gradient)
+def test_evaluate_zero_default_skips_zero_gate_sources():
+    p = make_params().requires_grad_()
+    gate = torch.tensor([[1.0, 0.0, 1.0]], requires_grad=True)
+    vsf.render_windowed(p, gate, H, W, "gauss").sum().backward()
+    assert gate.grad[0, 1] == 0.0  # source sautée : aucun gradient vers sa porte
+
+
+def test_evaluate_zero_keeps_forward_and_gives_gate_gradient():
+    p = make_params()
+    gate = torch.tensor([[1.0, 0.0, 1.0]], requires_grad=True)
+    mask = torch.tensor([[True, True, True]])
+    ref = vsf.render_windowed(p, gate.detach(), H, W, "gauss")
+    out = vsf.render_windowed(p, gate, H, W, "gauss", evaluate_zero=mask)
+    assert torch.equal(out, ref)  # une source à porte 0 contribue exactement 0
+    out.sum().backward()
+    assert gate.grad[0, 1] > 0  # mais sa porte reçoit d(rendu)/d(porte) = amplitude x profil
+
+
+def test_evaluate_zero_mask_excludes_unselected_zero_gates():
+    p = make_params()
+    gate = torch.tensor([[1.0, 0.0, 0.0]], requires_grad=True)
+    mask = torch.tensor([[True, True, False]])
+    vsf.render_windowed(p, gate, H, W, "gauss", evaluate_zero=mask).sum().backward()
+    assert gate.grad[0, 1] > 0 and gate.grad[0, 2] == 0.0

@@ -22,10 +22,10 @@ from pathlib import Path
 import torch
 
 from cell_shard_dataset import CellShardDataset
-from encoder_ckpt import (append_row, best_recorded, check_run_config, ensure_columns, has_checkpoint, load_checkpoint,
+from encoder_ckpt import (append_row, best_recorded, check_run_config, ensure_columns, has_checkpoint, load_checkpoint, load_model_weights,
                           rng_state, save_best, save_checkpoint, set_rng_state, trim_csv)
 from encoder_data import iter_items, make_lr_lambda
-from encoder_loss import LossConfig
+from encoder_loss import LossConfig, heatmap_scale
 from encoder_step import RENDER_KIND, NonFiniteStep, accumulate_step, all_finite
 from encoder_val import VAL_COLUMNS, validate
 from prefetch import prefetch
@@ -37,14 +37,14 @@ from source_encoder import EncoderConfig, SourceEncoder
 logger = logging.getLogger(__name__)
 
 DEFAULT_LUT_DIR = Path(__file__).resolve().parent.parent / "results" / "03_variable_sources"
-TRAIN_COLUMNS = ["step", "epoch", "lr", "loss", "recon", "sparsity", "binarise", "heatmap", "k_active",
+TRAIN_COLUMNS = ["step", "epoch", "lr", "loss", "recon", "sparsity", "binarise", "heatmap", "k_active", "k_active_hard", "gate_median",
                  "params_per_area", "px_per_s", "ms_step", "data_ms", "data_wait_ms", "render_ms", "n_chunks", "peak_mem_mb", "bin", "n_skipped", "grad_norm", "max_abs_logit",
                  "max_raw_A", "max_raw_a", "max_raw_b", "max_raw_w"]
 SKIPPED_COLUMNS = ["step", "epoch", "bin", "shard", "position", "reason"]
 POST_STEP_NAN = "poids non finis après le pas (instantané restauré)"
 MUTABLE_KEYS = frozenset({"epochs", "max_steps", "device", "out", "shards", "lut_dir", "checkpoint_every_min",
                           "log_every", "val_every_steps", "prefetch_depth", "render_px_budget",
-                          "max_consecutive_skips", "max_skip_fraction", "spike_factor", "spike_window"})
+                          "max_consecutive_skips", "max_skip_fraction", "spike_factor", "spike_window", "init_from"})
 STOP_SIGNALS = (signal.SIGTERM, signal.SIGINT)
 
 
@@ -56,6 +56,8 @@ class TrainConfig:
     px_budget: int = 400_000
     epochs: int = 10
     warmup_epochs: int = 2
+    gate_threshold: float = 0.5  # seuil de la porte dure après l'échauffement = seuil de select_sources
+    init_from: Path | None = None  # départ à chaud : poids seuls d'un best.pt / last.pt
     lr: float = 1e-3
     weight_decay: float = 1e-2
     warmup_steps: int = 1000
@@ -88,6 +90,8 @@ class TrainConfig:
                 raise ValueError(f"{name} doit être >= 1")
         if not 0 <= self.max_skip_fraction <= 1:
             raise ValueError("max_skip_fraction doit être dans [0, 1]")
+        if not 0 < self.gate_threshold < 1:
+            raise ValueError("gate_threshold doit être dans ]0, 1[")
         if self.warmup_epochs < 0 or self.clip <= 0 or self.lr <= 0 or (self.max_steps is not None and self.max_steps < 1):
             raise ValueError("warmup_epochs >= 0, clip > 0, lr > 0 et max_steps >= 1 requis")
 
@@ -107,13 +111,16 @@ def _save(cfg: TrainConfig, model, opt, sched, step: int, epoch: int, pos: int, 
                               "n_skipped": skips.total, "epoch_skipped": skips.epoch, "grad_norms": list(norms)})
 
 
-def _guarded_update(cfg: TrainConfig, model, opt, snapshot: Snapshot, norms, batch, peaks, lut5, step: int):
+def _guarded_update(cfg: TrainConfig, model, opt, snapshot: Snapshot, norms, batch, peaks, lut5, step: int,
+                    epoch: int = 0, heat_scale: float = 1.0):
     """(StepStats, None) si le pas est appliqué, sinon (None, raison) avec poids inchangés : valeurs non finies
     (NonFiniteStep), pic de gradient (norme > spike_factor x médiane des spike_window dernières) ou poids non finis
     après opt.step (instantané restauré)."""
     try:
         stats = accumulate_step(model, batch, peaks, lut5, step, k_train=cfg.k_train, loss_cfg=cfg.loss,
-                                render_px_budget=cfg.render_px_budget)
+                                render_px_budget=cfg.render_px_budget,
+                                gate_threshold=cfg.gate_threshold if epoch >= cfg.warmup_epochs else None,
+                                heat_scale=heat_scale)
     except NonFiniteStep as exc:
         return None, str(exc)
     norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.clip))  # norme avant écrêtage
@@ -188,7 +195,8 @@ def _log_row(cfg, path, step, epoch, lr, stats, item, wait_ms, dt, batch, device
     cuda = device.type == "cuda"
     append_row(path, {"step": step, "epoch": epoch, "lr": lr, "loss": stats.loss, "recon": stats.recon,
                       "sparsity": stats.sparsity, "binarise": stats.binarise, "heatmap": stats.heatmap,
-                      "k_active": stats.k_active, "params_per_area": stats.params_per_area, "px_per_s": px / dt,
+                      "k_active": stats.k_active, "k_active_hard": stats.k_active_hard,
+                      "gate_median": stats.gate_median, "params_per_area": stats.params_per_area, "px_per_s": px / dt,
                       "ms_step": 1000 * dt, "data_ms": item.data_ms, "data_wait_ms": wait_ms,
                       "render_ms": stats.render_ms, "n_chunks": stats.n_chunks,
                       "peak_mem_mb": torch.cuda.max_memory_allocated(device) / 2 ** 20 if cuda else 0.0,
@@ -225,6 +233,9 @@ def train(cfg: TrainConfig, resume: bool = False) -> TrainResult:
     best = best_recorded(cfg.out)  # ne jamais écraser un best.pt meilleur
     skips, norms, snapshot = SkipCounter(), collections.deque(maxlen=cfg.spike_window), Snapshot()
     resumed = resume and has_checkpoint(cfg.out)
+    if cfg.init_from is not None and not resumed:
+        model.load_state_dict(load_model_weights(cfg.init_from))  # poids seuls : optimiseur, pas et époque neufs
+        logger.info("poids initiaux chargés depuis %s", cfg.init_from)
     if resumed:
         ck = load_checkpoint(cfg.out)
         model.load_state_dict(ck["model"])
@@ -256,7 +267,8 @@ def train(cfg: TrainConfig, resume: bool = False) -> TrainResult:
                     batch = batch_to_device(item.batch, device)
                     peaks = None if item.peaks is None else item.peaks.to(device)
                     lr = opt.param_groups[0]["lr"]
-                    stats, reason = _guarded_update(cfg, model, opt, snapshot, norms, batch, peaks, lut5, step)
+                    scale = heatmap_scale(epoch, pos, len(batches), cfg.warmup_epochs)
+                    stats, reason = _guarded_update(cfg, model, opt, snapshot, norms, batch, peaks, lut5, step, epoch, scale)
                     sched.step()  # aussi après un pas écarté : échéances de lr alignées sur le numéro de pas
                     if device.type == "cuda":
                         torch.cuda.synchronize(device)
@@ -303,7 +315,10 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--px-budget", type=int, default=TrainConfig.px_budget)
     ap.add_argument("--epochs", type=int, default=10)
-    ap.add_argument("--warmup-epochs", type=int, default=2)
+    ap.add_argument("--warmup-epochs", type=int, default=TrainConfig.warmup_epochs,
+                    help="époques à porte molle + carte de pics (0 pour un départ à chaud)")
+    ap.add_argument("--gate-threshold", type=float, default=TrainConfig.gate_threshold)
+    ap.add_argument("--init-from", type=Path, default=None, help="best.pt ou last.pt : poids seuls, run neuf")
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--weight-decay", type=float, default=1e-2)
     ap.add_argument("--warmup-steps", type=int, default=1000)
@@ -335,7 +350,7 @@ def build_parser() -> argparse.ArgumentParser:
 def config_from_args(a: argparse.Namespace) -> TrainConfig:
     return TrainConfig(
         shards=a.shards, out=a.out, lut_dir=a.lut_dir, device=a.device, px_budget=a.px_budget, epochs=a.epochs,
-        warmup_epochs=a.warmup_epochs, lr=a.lr, weight_decay=a.weight_decay, warmup_steps=a.warmup_steps, clip=a.clip,
+        warmup_epochs=a.warmup_epochs, gate_threshold=a.gate_threshold, init_from=a.init_from, lr=a.lr, weight_decay=a.weight_decay, warmup_steps=a.warmup_steps, clip=a.clip,
         k_train=a.k_train, seed=a.seed, checkpoint_every_min=a.checkpoint_every_min, val_every_steps=a.val_every_steps,
         max_steps=a.max_steps, log_every=a.log_every,
         val_max_per_class=a.val_max_per_class, render_px_budget=a.render_px_budget, prefetch_depth=a.prefetch_depth,

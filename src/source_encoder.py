@@ -95,6 +95,7 @@ class HeadOut:
     raw_w: torch.Tensor
 
 
+RADIUS_SOFT_CLAMP = 250.0  # borne douce des rayons bruts (couvre la plus grande limite de rayon, ~195)
 HEAD_SOFT_CLAMP = 50.0  # borne douce des sorties brutes non bornées (logit, A, w) : c·tanh(x/c)
 
 
@@ -148,7 +149,7 @@ class SourceEncoder(nn.Module):
         with torch.autocast(device_type=z.device.type, enabled=False):  # positions et rayons en fp32
             h = self.head(z.float())
         return HeadOut(logits=soft_clamp(h[:, 0:1]), offsets=torch.tanh(h[:, 1:3]), raw_A=soft_clamp(h[:, 3:4]),
-                       raw_a=h[:, 4:5], raw_b=h[:, 5:6], cos2t=h[:, 6:7], sin2t=h[:, 7:8],
+                       raw_a=soft_clamp(h[:, 4:5], RADIUS_SOFT_CLAMP), raw_b=soft_clamp(h[:, 5:6], RADIUS_SOFT_CLAMP), cos2t=h[:, 6:7], sin2t=h[:, 7:8],
                        raw_w=soft_clamp(h[:, 8:9]))
 
 
@@ -203,16 +204,41 @@ def _crop_sizes(crop_hw: Sequence, batch: int) -> list[tuple[int, int]]:
     return [(int(h), int(w)) for h, w in crop_hw]
 
 
+def _inv_softplus_stable(s: torch.Tensor) -> torch.Tensor:
+    """log(expm1(s)) sans débordement fp32 (expm1 dépasse pour s > ~88.7) : s + log(1 − e^(−s)), s > 0."""
+    return s + torch.log(-torch.expm1(-s))
+
+
 def _soft_clamp_raw(raw: torch.Tensor, limit: torch.Tensor) -> torch.Tensor:
     """Borne douce du rayon physique r = 0.5 + softplus(raw) : r' = limit − softplus_τ(limit − r) < limit, avec
     τ = SOFT_CLAMP_FRAC * limit (identité loin de la limite, gradient non nul près de celle-ci). Retourne le brut associé."""
     s_max = (limit - 0.5)[:, None]  # on travaille sur s = softplus(raw) = r − 0.5 >= 0
     beta = 1.0 / (SOFT_CLAMP_FRAC * s_max)
     s_soft = s_max - F.softplus((s_max - F.softplus(raw)) * beta) / beta
-    return torch.log(torch.expm1(s_soft.clamp(min=1e-6)))
+    return _inv_softplus_stable(s_soft.clamp(min=1e-6))
 
 
-def _decode(out: HeadOut, k: int, crop_hw: Sequence, cfg: EncoderConfig):
+def _nms_logits(out: HeadOut) -> tuple[HeadOut, torch.Tensor]:
+    """NMS 3x3 sur la grille des têtes : (têtes dont les logits non maxima locaux de p sont masqués, carte keep)."""
+    p = torch.sigmoid(out.logits)
+    keep = p == F.max_pool2d(p, 3, stride=1, padding=1)
+    return dataclasses.replace(out, logits=torch.where(keep, out.logits, torch.full_like(out.logits, LOGIT_MASKED))), keep
+
+
+def _k_limits(areas, cfg: EncoderConfig, device: torch.device) -> torch.Tensor:
+    """(B,) min(cap, limite de compression D24) par cellule."""
+    return torch.tensor([min(cfg.cap, compression_k_limit(int(a), cfg.n_par, cfg.compression_frac)) for a in areas],
+                        device=device)
+
+
+def _on_mask(prob: torch.Tensor, ok: torch.Tensor, threshold: float, limits: torch.Tensor) -> torch.Tensor:
+    """Sources gardées : p >= seuil, place valide, rang (candidats triés par logit) < limite. Partagé entre
+    l'inférence (`select_sources`) et l'entraînement à porte dure, qui ne peuvent donc pas diverger."""
+    rank = torch.arange(prob.shape[1], device=prob.device)[None, :]
+    return (prob >= threshold) & ok & (rank < limits[:, None])
+
+
+def _decode(out: HeadOut, k: int, crop_hw: Sequence, cfg: EncoderConfig, keep: torch.Tensor | None = None):
     """Retourne (params (B,k,8), prob (B,k), ok (B,k)) : top-k des logits dans la zone non complétée.
 
     Politique de position : un candidat peut se trouver n'importe où dans le recadrage (non complété), y compris
@@ -243,7 +269,10 @@ def _decode(out: HeadOut, k: int, crop_hw: Sequence, cfg: EncoderConfig):
     theta = 0.5 * torch.atan2(pick(out.sin2t), pick(out.cos2t) + ANGLE_EPS)
     params = torch.stack([x, y, pick(out.raw_A), _soft_clamp_raw(pick(out.raw_a), limit),
                           _soft_clamp_raw(pick(out.raw_b), limit), theta, torch.zeros_like(x), pick(out.raw_w)], -1)
-    return params, torch.sigmoid(pick(out.logits)), valid.gather(1, idx)
+    ok = valid.gather(1, idx)
+    if keep is not None:  # candidats non maxima exclus (inexistants à l'inférence)
+        ok = ok & keep.reshape(B, -1).gather(1, idx)
+    return params, torch.sigmoid(pick(out.logits)), ok
 
 
 def decode_candidates(out: HeadOut, k_train: int, crop_hw: Sequence,
@@ -257,6 +286,30 @@ def decode_candidates(out: HeadOut, k_train: int, crop_hw: Sequence,
     return params, torch.where(ok, gate, torch.zeros_like(gate)), ok
 
 
+def hard_gate_st(prob: torch.Tensor, ok: torch.Tensor, threshold: float, limits: torch.Tensor | None = None) -> torch.Tensor:
+    """Porte dure à gradient direct : 1 pour les sources que garde `select_sources` en avant (p >= seuil et, si
+    `limits` (B,) est donné, rang < limite), gradient de p en arrière (hard + (p − p.detach()), exact en avant).
+    Places non ok exactement à 0."""
+    lim = torch.full((prob.shape[0],), prob.shape[1], device=prob.device) if limits is None else limits
+    hard = _on_mask(prob.detach(), ok, threshold, lim).to(prob.dtype)
+    return torch.where(ok, hard + (prob - prob.detach()), torch.zeros_like(prob))
+
+
+def decode_candidates_hard(out: HeadOut, k_train: int, crop_hw: Sequence, cfg: EncoderConfig, threshold: float,
+                           areas) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Entraînement après l'échauffement : (params (B,k,8), porte dure à gradient (B,k), prob (B,k), ok (B,k)).
+
+    La porte rendue vaut exactement la sélection de `select_sources` : NMS 3x3, p >= seuil, au plus
+    min(cap, limite de compression) sources par cellule. ok = places valides ET maxima locaux (les non maxima
+    n'existent pas à l'inférence : ni rendus, ni comptés). prob = probabilité molle (0 hors ok), pour la parcimonie
+    et la binarisation. Le rendu doit évaluer les sources à porte 0 (`evaluate_zero=ok`) pour que leur logit reçoive
+    un gradient (une source éteinte forte peut en évincer une plus faible)."""
+    masked, keep = _nms_logits(out)
+    params, prob, ok = _decode(masked, k_train, crop_hw, cfg, keep)
+    prob = torch.where(ok, prob, torch.zeros_like(prob))
+    return params, hard_gate_st(prob, ok, threshold, _k_limits(areas, cfg, prob.device)), prob, ok
+
+
 @torch.no_grad()
 def select_sources(out: HeadOut, areas, crop_hw: Sequence, cfg: EncoderConfig,
                    threshold: float = 0.5) -> tuple[torch.Tensor, torch.Tensor]:
@@ -264,12 +317,7 @@ def select_sources(out: HeadOut, areas, crop_hw: Sequence, cfg: EncoderConfig,
 
     NMS 3x3 sur la grille des têtes : seuls les maxima locaux de p sont gardés (une source par blob).
     Retourne (params (B, Kmax, 8), active (B, Kmax) 0/1), actives en tête (triées par probabilité)."""
-    p = torch.sigmoid(out.logits)
-    keep = p == F.max_pool2d(p, 3, stride=1, padding=1)
-    out = dataclasses.replace(out, logits=torch.where(keep, out.logits, torch.full_like(out.logits, LOGIT_MASKED)))
-    limits = torch.tensor([min(cfg.cap, compression_k_limit(int(a), cfg.n_par, cfg.compression_frac))
-                           for a in areas], device=out.logits.device)
+    out, _ = _nms_logits(out)
+    limits = _k_limits(areas, cfg, out.logits.device)
     params, prob, ok = _decode(out, int(limits.max()), crop_hw, cfg)
-    rank = torch.arange(params.shape[1], device=limits.device)[None, :]
-    active = (prob >= threshold) & ok & (rank < limits[:, None])
-    return params, active.to(params.dtype)
+    return params, _on_mask(prob, ok, threshold, limits).to(params.dtype)

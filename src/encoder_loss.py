@@ -9,6 +9,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from adaptive_fit import compression_k_limit
 from variable_source_fit import EPS, Targets
 
 logger = logging.getLogger(__name__)
@@ -24,12 +25,16 @@ def recon_loss(rec: torch.Tensor, targets: Targets) -> torch.Tensor:
     return ((err ** 2) * targets.valid).sum((1, 2)) / targets.npix
 
 
-def sparsity_loss(gate: torch.Tensor, areas, n_par: int = 7, ok: torch.Tensor | None = None) -> torch.Tensor:
-    """Moyenne sur les cellules de Σ_k porte · n_par / aire : paramètres rapportés à l'aire.
-    ok (B, K) : places valides ; les autres sont exclues de la somme."""
-    a = torch.as_tensor(areas, dtype=gate.dtype, device=gate.device)
-    g = gate if ok is None else gate * ok.to(gate.dtype)
-    return (g.sum(1) * n_par / a).mean()
+def sparsity_loss(prob: torch.Tensor, areas, n_par: int = 7, ok: torch.Tensor | None = None,
+                  cap: int = 128, frac: float = 0.5) -> torch.Tensor:
+    """Charnière sur le nombre attendu de sources : par cellule, relu(Σ_k p_k − k_limite) · n_par / aire, moyennée.
+    k_limite = min(cap, limite de compression D24 = max(1, ⌊frac·aire/n_par⌋)) : aucune pénalité en dessous,
+    pente en paramètres par pixel (même échelle que l'ancien terme) au-dessus. ok (B, K) : places valides."""
+    a = torch.as_tensor(areas, dtype=prob.dtype, device=prob.device)
+    limits = torch.tensor([min(cap, compression_k_limit(int(v), n_par, frac)) for v in a.tolist()],
+                          dtype=prob.dtype, device=prob.device)
+    p = prob if ok is None else prob * ok.to(prob.dtype)
+    return (F.relu(p.sum(1) - limits) * n_par / a).mean()
 
 
 def binarise_loss(gate: torch.Tensor, ok: torch.Tensor | None = None) -> torch.Tensor:
@@ -86,6 +91,16 @@ def greedy_peak_map(rate: np.ndarray, cell_mask: np.ndarray, k: int, sigma: floa
     return heat
 
 
+def heatmap_scale(epoch: int, pos: int, n_batches: int, warmup_epochs: int) -> float:
+    """Facteur du poids de la carte de pics : 1 avant la dernière époque d'échauffement, décroissance linéaire vers 0
+    sur cette époque (pos / n_batches), 0 ensuite (et partout si warmup_epochs = 0)."""
+    if epoch < warmup_epochs - 1:
+        return 1.0
+    if epoch == warmup_epochs - 1:
+        return 1.0 - min(max(pos, 0), n_batches) / max(n_batches, 1)
+    return 0.0
+
+
 @dataclass(frozen=True)
 class LossConfig:
     """Poids des termes ; lambda_binarise monte linéairement sur binarise_ramp_steps pas."""
@@ -120,10 +135,10 @@ class LossParts:
 
 def total_loss(rec: torch.Tensor, targets: Targets, gate: torch.Tensor, areas, cfg: LossConfig, step: int,
                logits: torch.Tensor | None = None, peak_maps: torch.Tensor | None = None,
-               n_par: int = 7, ok: torch.Tensor | None = None) -> LossParts:
+               n_par: int = 7, ok: torch.Tensor | None = None, cap: int = 128, frac: float = 0.5) -> LossParts:
     """recon + λ_sp · parcimonie + λ_bin(step) · binarisation + λ_hm · carte de pics (si logits et peak_maps fournis)."""
     recon = recon_loss(rec, targets).mean()
-    sparse = sparsity_loss(gate, areas, n_par, ok)
+    sparse = sparsity_loss(gate, areas, n_par, ok, cap, frac)
     binar = binarise_loss(gate, ok)
     use_heat = logits is not None and peak_maps is not None and cfg.lambda_heatmap > 0
     heat = warmup_heatmap_loss(logits, peak_maps) if use_heat else torch.zeros((), dtype=recon.dtype, device=recon.device)

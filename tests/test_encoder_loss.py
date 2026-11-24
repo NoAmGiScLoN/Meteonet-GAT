@@ -5,7 +5,7 @@ import torch
 
 import variable_source_fit as vsf
 from encoder_loss import (LossConfig, LossParts, binarise_loss, greedy_peak_map, recon_loss, sparsity_loss,
-                          total_loss, warmup_heatmap_loss)
+                          total_loss, warmup_heatmap_loss, heatmap_scale)
 from profile_lut import LogWLutSpec, load_or_build_logw_lut
 from source_encoder import EncoderConfig, SourceEncoder, decode_candidates, head_grid_hw, pad_inputs
 
@@ -33,11 +33,29 @@ def test_recon_loss_zero_for_perfect_reconstruction_up_to_eps(make_cell):
 
 
 @pytest.mark.unit
-def test_sparsity_decreases_with_gates_and_prices_by_area():
-    areas = torch.tensor([100.0, 50.0])
-    high, low = torch.ones(2, 4), torch.full((2, 4), 0.1)
-    assert sparsity_loss(low, areas) < sparsity_loss(high, areas)
-    assert float(sparsity_loss(high, areas)) == pytest.approx((4 * 7 / 100 + 4 * 7 / 50) / 2)
+def test_sparsity_is_zero_below_the_compression_limit():
+    # aire 100 -> k_limit = floor(0.5 * 100 / 7) = 7 ; Σp = 4 < 7
+    assert float(sparsity_loss(torch.ones(2, 4), torch.tensor([100.0, 100.0]))) == 0.0
+
+
+@pytest.mark.unit
+def test_sparsity_is_linear_above_the_limit_in_params_per_pixel():
+    areas = torch.tensor([100.0, 50.0])  # k_limit = 7 et 3
+    p = torch.ones(2, 10)  # excès 3 et 7
+    assert float(sparsity_loss(p, areas)) == pytest.approx((3 * 7 / 100 + 7 * 7 / 50) / 2)
+    assert float(sparsity_loss(torch.ones(2, 11), areas)) == pytest.approx((4 * 7 / 100 + 8 * 7 / 50) / 2)
+
+
+@pytest.mark.unit
+def test_sparsity_honours_the_cap_and_gives_a_gradient_only_above_the_limit():
+    area = torch.tensor([1e6])  # compression : 71428 -> plafond 128
+    assert float(sparsity_loss(torch.ones(1, 130), area, cap=128)) == pytest.approx(2 * 7 / 1e6)
+    p = torch.full((1, 10), 0.5, requires_grad=True)  # Σp = 5 > k_limit = 3 (aire 50)
+    sparsity_loss(p, torch.tensor([50.0])).backward()
+    assert (p.grad > 0).all()
+    q = torch.full((1, 2), 0.5, requires_grad=True)
+    sparsity_loss(q, torch.tensor([50.0])).backward()
+    assert (q.grad == 0).all()
 
 
 @pytest.mark.unit
@@ -167,4 +185,17 @@ def test_masked_losses_ignore_non_ok_slots():
     ok = torch.tensor([[True, True, False, False]])
     assert float(binarise_loss(gate, ok)) == pytest.approx(0.125)  # (0 + 0.25) / 2 ; sans masque : 0.0625
     assert float(binarise_loss(gate)) == pytest.approx(0.0625)
-    assert float(sparsity_loss(gate, torch.tensor([10.0]), ok=ok)) == pytest.approx(1.5 * 7 / 10)
+    # aire 10 -> k_limit = 1 : Σp valides = 1.5 (excès 0.5) ; sans masque Σp = 1.5 aussi, on teste donc le masque ci-dessous
+    assert float(sparsity_loss(gate, torch.tensor([10.0]), ok=ok)) == pytest.approx(0.5 * 7 / 10)
+    junk = torch.tensor([[1.0, 0.5, 1.0, 1.0]])  # places non valides à porte non nulle : ignorées
+    assert float(sparsity_loss(junk, torch.tensor([10.0]), ok=ok)) == pytest.approx(0.5 * 7 / 10)
+
+
+@pytest.mark.unit
+def test_heatmap_scale_anneals_linearly_over_the_last_warmup_epoch():
+    assert heatmap_scale(0, 5, 10, warmup_epochs=2) == 1.0  # avant la dernière époque d'échauffement
+    assert heatmap_scale(1, 0, 10, warmup_epochs=2) == 1.0
+    assert heatmap_scale(1, 5, 10, warmup_epochs=2) == pytest.approx(0.5)
+    assert heatmap_scale(1, 9, 10, warmup_epochs=2) == pytest.approx(0.1)
+    assert heatmap_scale(2, 0, 10, warmup_epochs=2) == 0.0  # après l'échauffement
+    assert heatmap_scale(0, 0, 10, warmup_epochs=0) == 0.0  # démarrage à chaud : pas de carte de pics

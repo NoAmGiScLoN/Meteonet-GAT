@@ -22,7 +22,7 @@ import variable_source_fit as vsf
 from encoder_loss import binarise_loss, recon_loss, sparsity_loss, warmup_heatmap_loss, LossConfig
 from profile_lut import L_LUT
 from size_batching import Batch
-from source_encoder import HeadOut, SourceEncoder, decode_candidates
+from source_encoder import EncoderConfig, HeadOut, SourceEncoder, decode_candidates, decode_candidates_hard, hard_gate_st  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,8 @@ class StepStats:
     params_per_area: float
     render_ms: float
     n_chunks: int
+    k_active_hard: float = 0.0  # Σ 1[p >= seuil] par cellule : ce que garde l'inférence
+    gate_median: float = 0.0  # médiane des probabilités des places valides (moyenne pondérée des médianes des morceaux)
     max_abs_logit: float = 0.0  # extrêmes des sorties brutes de têtes (alerte précoce d'une divergence)
     max_raw_A: float = 0.0
     max_raw_a: float = 0.0
@@ -102,36 +104,50 @@ def _ok_total(batch: Batch, k_train: int) -> int:
     return sum(min(min(k_train, grid), math.ceil(h / 2) * math.ceil(w / 2)) for h, w in batch.crop_hw)
 
 
+def _decode_for_training(out: HeadOut, k_train: int, batch: Batch, cfg: EncoderConfig, threshold: float | None):
+    """(params, porte rendue, porte molle, ok, evaluate_zero). Échauffement (threshold None) : porte molle fractionnaire.
+    Ensuite : porte dure à gradient direct ; les sources à porte 0 restent évaluées (gradient vers leur logit)."""
+    if threshold is None:
+        params, gate, ok = decode_candidates(out, k_train, batch.crop_hw, cfg)
+        return params, gate, gate, ok, None
+    params, gate, prob, ok = decode_candidates_hard(out, k_train, batch.crop_hw, cfg, threshold, batch.areas)
+    return params, gate, prob, ok, ok
+
+
 def _chunk(model: SourceEncoder, batch: Batch, peaks, lut5, step: int, k_train: int, cfg: LossConfig,
-           budget: int, n_total: int, m_total: int, p_total: float):
+           budget: int, n_total: int, m_total: int, p_total: float, threshold: float | None = None,
+           heat_scale: float = 1.0):
     """Perte d'un morceau (normalisée par le lot entier) et rétropropagation ; None si le rendu dépasse le budget."""
     out = encode(model, batch.x)
-    params, gate, ok = decode_candidates(out, k_train, batch.crop_hw, model.cfg)
+    params, gate, soft, ok, eval_zero = _decode_for_training(out, k_train, batch, model.cfg, threshold)
     _require_finite("paramètres ou portes", params, gate)  # avant le rendu (_check_gate reste le filet)
     t, n = batch.targets, batch.x.shape[0]
-    if n > 1 and render_cost(params, gate, t.Hm, t.Wm) > budget:
+    if n > 1 and render_cost(params, ok.to(gate.dtype), t.Hm, t.Wm) > budget:
         return None
     t0 = time.perf_counter()
-    rec = vsf.render_windowed(params, gate, t.Hm, t.Wm, RENDER_KIND, lut5)
+    rec = vsf.render_windowed(params, gate, t.Hm, t.Wm, RENDER_KIND, lut5, evaluate_zero=eval_zero)
     if rec.device.type == "cuda":
         torch.cuda.synchronize(rec.device)
     render_ms = 1000 * (time.perf_counter() - t0)
     recon = recon_loss(rec, t).sum() / n_total
-    sparse = sparsity_loss(gate, batch.areas, model.cfg.n_par, ok) * (n / n_total)
+    sparse = sparsity_loss(soft, batch.areas, model.cfg.n_par, ok, model.cfg.cap, model.cfg.compression_frac) * (n / n_total)
     m_c = ok.to(gate.dtype).sum()
-    binar = binarise_loss(gate, ok) * m_c.clamp(min=1.0) / max(m_total, 1)
+    binar = binarise_loss(soft, ok) * m_c.clamp(min=1.0) / max(m_total, 1)
     use_heat = peaks is not None and cfg.lambda_heatmap > 0
     if use_heat:
         pos_c = float((peaks >= 1.0).sum())
         heat = warmup_heatmap_loss(out.logits, peaks) * max(pos_c, 1.0) / max(p_total, 1.0)
     else:
         heat = torch.zeros((), device=rec.device)
-    total = recon + cfg.lambda_sparsity * sparse + cfg.binarise_weight(step) * binar + cfg.lambda_heatmap * heat
+    total = recon + cfg.lambda_sparsity * sparse + cfg.binarise_weight(step) * binar + cfg.lambda_heatmap * heat_scale * heat
     _require_finite("perte", total)
     total.backward()
-    active = ((gate.detach() >= ACTIVE_THRESHOLD) & ok).sum(1).float()
+    active = ((soft.detach() >= ACTIVE_THRESHOLD) & ok).sum(1).float()
+    hard = ((soft.detach() >= ACTIVE_THRESHOLD) & ok).sum(1).float() if threshold is None else (gate.detach() == 1.0).sum(1).float()
+    median = float(soft.detach()[ok].median()) if bool(ok.any()) else 0.0
     return {"loss": float(total.detach()), "recon": float(recon.detach()), "sparsity": float(sparse.detach()),
             "binarise": float(binar.detach()), "heatmap": float(heat.detach()), "k": float(active.sum()),
+            "k_hard": float(hard.sum()), "gate_median": median * n / n_total,
             "ppa": float((active * model.cfg.n_par / batch.areas).sum()), "render_ms": render_ms,
             **_head_extremes(out)}
 
@@ -151,7 +167,7 @@ def _free_memory() -> None:
         torch.cuda.empty_cache()
 
 
-def _attempt(model, batch: Batch, peaks, lut5, step, k_train, cfg, budget, chunks: int):
+def _attempt(model, batch: Batch, peaks, lut5, step, k_train, cfg, budget, chunks: int, threshold, heat_scale):
     """StepStats si tout passe, sinon "oom" ou "render" (les gradients partiels sont alors à jeter)."""
     n = batch.x.shape[0]
     m_total = _ok_total(batch, k_train)
@@ -162,7 +178,7 @@ def _attempt(model, batch: Batch, peaks, lut5, step, k_train, cfg, budget, chunk
         failed = False
         try:
             res = _chunk(model, _slice(batch, a, b), None if peaks is None else peaks[a:b], lut5, step, k_train, cfg,
-                         budget, n, m_total, p_total)
+                         budget, n, m_total, p_total, threshold, heat_scale)
         except RuntimeError as exc:
             if not is_oom(exc):
                 raise
@@ -176,21 +192,25 @@ def _attempt(model, batch: Batch, peaks, lut5, step, k_train, cfg, budget, chunk
             acc[key] = max(acc.get(key, 0.0), value) if key in MAX_KEYS else acc.get(key, 0.0) + value
     _require_finite("gradients", *(p.grad for p in model.parameters() if p.grad is not None))
     return StepStats(loss=acc["loss"], recon=acc["recon"], sparsity=acc["sparsity"], binarise=acc["binarise"],
-                     heatmap=acc["heatmap"], k_active=acc["k"] / n, params_per_area=acc["ppa"] / n,
+                     heatmap=acc["heatmap"], k_active=acc["k"] / n, k_active_hard=acc["k_hard"] / n,
+                     gate_median=acc["gate_median"], params_per_area=acc["ppa"] / n,
                      render_ms=acc["render_ms"], n_chunks=chunks, **{k: acc[k] for k in MAX_KEYS})
 
 
 def accumulate_step(model: SourceEncoder, batch: Batch, peaks: torch.Tensor | None, lut5: torch.Tensor, step: int, *,
-                    k_train: int, loss_cfg: LossConfig, render_px_budget: int, chunks: int = 1) -> StepStats:
+                    k_train: int, loss_cfg: LossConfig, render_px_budget: int, chunks: int = 1,
+                    gate_threshold: float | None = None, heat_scale: float = 1.0) -> StepStats:
     """Calcule la perte du lot et accumule les gradients dans model (remis à zéro au début) ; relance en
     doublant les morceaux si le rendu dépasse render_px_budget ou si la mémoire manque.
+    gate_threshold None : porte molle (échauffement) ; sinon porte dure 1[p >= seuil] à gradient direct, comme
+    l'inférence. heat_scale : facteur du poids de la carte de pics (décroissance en fin d'échauffement).
     Lève NonFiniteStep (gradients remis à zéro) si paramètres, portes, perte ou gradients ne sont pas finis."""
     n = batch.x.shape[0]
     chunks = max(1, min(chunks, n))
     while True:
         model.zero_grad(set_to_none=True)
         try:
-            result = _attempt(model, batch, peaks, lut5, step, k_train, loss_cfg, render_px_budget, chunks)
+            result = _attempt(model, batch, peaks, lut5, step, k_train, loss_cfg, render_px_budget, chunks, gate_threshold, heat_scale)
         except NonFiniteStep:
             model.zero_grad(set_to_none=True)  # aucun gradient partiel ne doit survivre au pas écarté
             raise
