@@ -17,7 +17,8 @@
 #   mkdir -p results/10_e7/logs && STAGES="0 1 2 3 4" PY=~/gatenv/bin/python nohup bash scripts/run_jetson_e7.sh > results/10_e7/logs/run.log 2>&1 &
 #   STAGES="0" ...  smoke seul ; STAGES="3 4" ... étapes choisies (le résumé s'affiche toujours à la fin).
 # Variables : PY (python3)  DEV (cuda)  REQUIRE_CUDA (1 ; 0 = pas d'assertion CUDA)  STAGES ("0 1 2 3 4")
-#             EPOCHS (20)  SHARDS (results/08_e7_cells)  RETRIES (3)
+#             EPOCHS (20)  SHARDS (results/08_e7_cells)  RETRIES (3)  TRAIN_DIR ($OUT/train)
+#             WARMUP_EPOCHS (2)  INIT_FROM (vide ; p. ex. results/10_e7/train/best.pt avec TRAIN_DIR=results/10_e7/train_v2)
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1   # racine du dépôt
 PY="${PY:-python3}"
@@ -27,6 +28,9 @@ STAGES="${STAGES:-0 1 2 3 4}"
 EPOCHS="${EPOCHS:-20}"
 SHARDS="${SHARDS:-results/08_e7_cells}"
 OUT=results/10_e7
+TRAIN_DIR="${TRAIN_DIR:-$OUT/train}"   # dossier d'entraînement (nouveau dossier pour une reprise à chaud)
+WARMUP_EPOCHS="${WARMUP_EPOCHS:-2}"
+INIT_FROM="${INIT_FROM:-}"             # point de reprise dont on charge les poids seuls (optimiseur neuf)
 LOGS=$OUT/logs
 SRC=results/03_variable_sources
 E5=archive/E5_adaptive_k/results
@@ -218,7 +222,8 @@ PYEOF
 }
 
 stage_2() {
-    run 2_train "$PY" src/encoder_train.py --shards "$SHARDS" --out "$OUT/train" --device "$DEV" --epochs "$EPOCHS" --resume
+    run 2_train "$PY" src/encoder_train.py --shards "$SHARDS" --out "$TRAIN_DIR" --device "$DEV" --epochs "$EPOCHS" \
+        --warmup-epochs "$WARMUP_EPOCHS" ${INIT_FROM:+--init-from "$INIT_FROM"} --resume
 }
 
 stage_3() {
@@ -227,8 +232,8 @@ stage_3() {
         STATUS+=("OK     3_bench (déjà fait)")
         return 0
     fi
-    [ -f "$OUT/train/best.pt" ] || { echo "best.pt absent : lancer l'étape 2 d'abord."; STATUS+=("ÉCHEC  3_bench (pas de best.pt)"); return 0; }
-    TRIES=1 run 3_bench "$PY" src/encoder_eval.py --ckpt "$OUT/train/best.pt" --iters 0 25 50 100 200 --device "$DEV" \
+    [ -f "$TRAIN_DIR/best.pt" ] || { echo "best.pt absent : lancer l'étape 2 d'abord."; STATUS+=("ÉCHEC  3_bench (pas de best.pt)"); return 0; }
+    TRIES=1 run 3_bench "$PY" src/encoder_eval.py --ckpt "$TRAIN_DIR/best.pt" --iters 0 25 50 100 200 --device "$DEV" \
                 --samples "2016=$SRC/sample_40.pkl" "2017=$SRC/sample_40_2017.pkl" \
                 --e5 "2016=$E5/adaptive_2016_c050,$E5/adaptive_2016" "2017=$E5/adaptive_2017_c050,$E5/adaptive_2017" \
                 --out "$OUT/bench"

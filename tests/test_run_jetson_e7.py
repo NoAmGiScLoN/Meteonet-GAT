@@ -101,14 +101,23 @@ def test_smoke_wipes_its_folder_and_never_resumes() -> None:
 @pytest.mark.integration
 def test_train_stage_is_resumable_and_uses_epochs_variable() -> None:
     call = run_calls()["2_train"]
-    assert "--resume" in call and '--epochs "$EPOCHS"' in call and '--out "$OUT/train"' in call
+    assert "--resume" in call and '--epochs "$EPOCHS"' in call and '--out "$TRAIN_DIR"' in call
     assert '--shards "$SHARDS"' in call and '--device "$DEV"' in call
+
+
+@pytest.mark.integration
+def test_train_stage_supports_warm_start_and_train_dir_overrides() -> None:
+    # Reprise à chaud depuis un point de reprise (poids seuls) dans un nouveau dossier (correctif du portail)
+    text = script_text()
+    call = run_calls()["2_train"]
+    assert 'TRAIN_DIR="${TRAIN_DIR:-$OUT/train}"' in text and 'WARMUP_EPOCHS="${WARMUP_EPOCHS:-2}"' in text
+    assert '--warmup-epochs "$WARMUP_EPOCHS"' in call and '${INIT_FROM:+--init-from "$INIT_FROM"}' in call
 
 
 @pytest.mark.integration
 def test_bench_stage_uses_best_checkpoint_both_years_and_is_idempotent() -> None:
     call = run_calls()["3_bench"]
-    assert '--ckpt "$OUT/train/best.pt"' in call and '--out "$OUT/bench"' in call
+    assert '--ckpt "$TRAIN_DIR/best.pt"' in call and '--out "$OUT/bench"' in call
     assert "--iters 0 25 50 100 200" in call
     assert "2016=$SRC/sample_40.pkl" in call and "2017=$SRC/sample_40_2017.pkl" in call
     assert "archive/E5_adaptive_k/results" in script_text() and "--e5" in call
