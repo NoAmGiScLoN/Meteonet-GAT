@@ -148,7 +148,7 @@ path = os.path.join(os.environ["SMOKE_DIR"], "train.csv")
 if not os.path.isfile(path):
     raise SystemExit("train.csv absent")
 t = pd.read_csv(path).sort_values("step")
-t = t.groupby("bin", group_keys=False).apply(lambda part: part.iloc[WARMUP_STEPS:])
+t = t[t.groupby("bin").cumcount() >= WARMUP_STEPS]   # sans apply : pandas récent retire la colonne de groupe
 g = t.groupby("bin").agg(lignes=("step", "size"), ms_step=("ms_step", "median"), data_ms=("data_ms", "median"),
                          render_ms=("render_ms", "median"), peak_mem_mb=("peak_mem_mb", "max")).round(1)
 g = g[g.lignes >= MIN_ROWS]
