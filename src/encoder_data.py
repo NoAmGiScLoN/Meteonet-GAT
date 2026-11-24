@@ -26,6 +26,7 @@ class BatchItem:
     batch: Batch
     peaks: torch.Tensor | None
     data_ms: float
+    ids: tuple[int, ...] = ()  # positions des cellules dans l'index (pour tracer un lot écarté)
 
 
 def make_lr_lambda(warmup_steps: int, total_steps: int):
@@ -55,4 +56,4 @@ def iter_items(data: CellShardDataset, batches: Sequence[Sequence[int]], with_pe
         records = [data[i] for i in ids]
         batch = collate(records)
         peaks = peak_maps_for(records, batch.targets.Hm, batch.targets.Wm, enc, sigma) if with_peaks else None
-        yield BatchItem(batch, peaks, 1000 * (time.perf_counter() - t0))
+        yield BatchItem(batch, peaks, 1000 * (time.perf_counter() - t0), tuple(ids))

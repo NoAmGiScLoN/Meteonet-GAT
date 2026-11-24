@@ -1,4 +1,6 @@
 """Pas d'entraînement par morceaux : somme des pertes = perte du lot entier, reprise sur OOM, budget de rendu."""
+import dataclasses
+
 import pytest
 import torch
 
@@ -127,3 +129,27 @@ def test_heads_stay_float32_under_autocast(setup):
     with torch.autocast("cpu", dtype=torch.bfloat16):
         out = model(batch.x)
     assert out.logits.dtype == torch.float32 and out.offsets.dtype == torch.float32
+
+
+@pytest.mark.unit
+def test_nan_params_raise_non_finite_step_before_render(setup, lut5, monkeypatch):
+    real = encoder_step.encode
+
+    def nan_logits(model, x):
+        out = real(model, x)
+        return dataclasses.replace(out, logits=out.logits * float("nan"))
+    monkeypatch.setattr(encoder_step, "encode", nan_logits)
+    monkeypatch.setattr(encoder_step.vsf, "render_windowed", lambda *a, **k: pytest.fail("rendu appelé"))
+    with pytest.raises(encoder_step.NonFiniteStep):
+        _run(setup, lut5)
+    assert all(p.grad is None for p in setup[0].parameters())
+
+
+@pytest.mark.unit
+def test_non_finite_gradient_raises_and_clears_grads(setup, lut5):
+    first = next(setup[0].parameters())
+    handle = first.register_hook(lambda g: g * float("inf"))
+    with pytest.raises(encoder_step.NonFiniteStep, match="gradients"):
+        _run(setup, lut5)
+    handle.remove()
+    assert all(p.grad is None for p in setup[0].parameters())

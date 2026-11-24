@@ -25,7 +25,7 @@ from encoder_ckpt import (append_row, best_recorded, check_run_config, has_check
                           save_best, save_checkpoint, set_rng_state, trim_csv)
 from encoder_data import iter_items, make_lr_lambda
 from encoder_loss import LossConfig
-from encoder_step import RENDER_KIND, accumulate_step
+from encoder_step import RENDER_KIND, NonFiniteStep, accumulate_step
 from encoder_val import VAL_COLUMNS, validate
 from prefetch import prefetch
 from profile_lut import LogWLutSpec, load_or_build_logw_lut
@@ -36,9 +36,11 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_LUT_DIR = Path(__file__).resolve().parent.parent / "results" / "03_variable_sources"
 TRAIN_COLUMNS = ["step", "epoch", "lr", "loss", "recon", "sparsity", "binarise", "heatmap", "k_active",
-                 "params_per_area", "px_per_s", "ms_step", "data_ms", "data_wait_ms", "render_ms", "n_chunks", "peak_mem_mb", "bin"]
+                 "params_per_area", "px_per_s", "ms_step", "data_ms", "data_wait_ms", "render_ms", "n_chunks", "peak_mem_mb", "bin", "n_skipped"]
+SKIPPED_COLUMNS = ["step", "epoch", "bin", "shard", "position"]
 MUTABLE_KEYS = frozenset({"epochs", "max_steps", "device", "out", "shards", "lut_dir", "checkpoint_every_min",
-                          "log_every", "val_every_steps", "prefetch_depth", "render_px_budget"})
+                          "log_every", "val_every_steps", "prefetch_depth", "render_px_budget",
+                          "max_consecutive_skips", "max_skip_fraction"})
 STOP_SIGNALS = (signal.SIGTERM, signal.SIGINT)
 
 
@@ -64,6 +66,8 @@ class TrainConfig:
     val_max_per_class: int = 500
     render_px_budget: int = 20_000_000
     prefetch_depth: int = 2
+    max_consecutive_skips: int = 20  # pas non finis consécutifs tolérés avant d'abandonner
+    max_skip_fraction: float = 0.01  # part maximale de pas écartés dans une époque
     train_split: str = "train"
     val_split: str = "val"
     lut_dir: Path = DEFAULT_LUT_DIR
@@ -73,9 +77,11 @@ class TrainConfig:
 
     def __post_init__(self) -> None:
         for name in ("px_budget", "epochs", "warmup_steps", "k_train", "val_every_steps", "log_every", "val_max_per_class",
-                     "render_px_budget"):
+                     "render_px_budget", "max_consecutive_skips"):
             if getattr(self, name) < 1:
                 raise ValueError(f"{name} doit être >= 1")
+        if not 0 <= self.max_skip_fraction <= 1:
+            raise ValueError("max_skip_fraction doit être dans [0, 1]")
         if self.warmup_epochs < 0 or self.clip <= 0 or self.lr <= 0 or (self.max_steps is not None and self.max_steps < 1):
             raise ValueError("warmup_epochs >= 0, clip > 0, lr > 0 et max_steps >= 1 requis")
 
@@ -88,9 +94,48 @@ class TrainResult:
     stopped_by: int | None = None
 
 
-def _save(cfg: TrainConfig, model, opt, sched, step: int, epoch: int, pos: int, best: float) -> None:
+@dataclass
+class SkipCounter:
+    """Pas écartés (non finis) : cumul du run, série en cours et cumul de l'époque (état mutable de la boucle)."""
+    total: int = 0
+    consecutive: int = 0
+    epoch: int = 0
+
+    def hit(self) -> None:
+        self.total, self.consecutive, self.epoch = self.total + 1, self.consecutive + 1, self.epoch + 1
+
+    def ok(self) -> None:
+        self.consecutive = 0
+
+
+def _save(cfg: TrainConfig, model, opt, sched, step: int, epoch: int, pos: int, best: float,
+          skips: SkipCounter) -> None:
     save_checkpoint(cfg.out, {"model": model.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(),
-                              "rng": rng_state(), "step": step, "epoch": epoch, "pos": pos, "best_val": best})
+                              "rng": rng_state(), "step": step, "epoch": epoch, "pos": pos, "best_val": best,
+                              "n_skipped": skips.total, "epoch_skipped": skips.epoch})
+
+
+def _skip_step(cfg: TrainConfig, sched, skips: SkipCounter, exc: NonFiniteStep, item, index, step: int,
+               epoch: int) -> None:
+    """Écarte le pas : poids inchangés (l'optimiseur ne tourne pas), planificateur avancé pour garder les
+    échéances de lr alignées sur le numéro de pas ; trace dans le journal et skipped_batches.csv."""
+    skips.hit()
+    entries = [index.entries[i] for i in item.ids]
+    logger.warning("pas %d écarté (%s) : classe %s, cellules %s", step, exc, item.batch.meta[0]["bin"],
+                   [(e.shard, e.position) for e in entries])
+    for e in entries:
+        append_row(cfg.out / "skipped_batches.csv", {"step": step, "epoch": epoch, "bin": e.bin, "shard": e.shard,
+                                                      "position": e.position}, SKIPPED_COLUMNS)
+    if skips.consecutive > cfg.max_consecutive_skips:
+        raise RuntimeError(f"{skips.consecutive} pas consécutifs non finis (limite {cfg.max_consecutive_skips}) : "
+                           f"arrêt au pas {step}, voir {cfg.out / 'skipped_batches.csv'}")
+    sched.step()
+
+
+def _check_epoch_skips(cfg: TrainConfig, skips: SkipCounter, n_batches: int, epoch: int) -> None:
+    if skips.epoch > cfg.max_skip_fraction * n_batches:
+        raise RuntimeError(f"époque {epoch} : {skips.epoch}/{n_batches} pas écartés (non finis), au-delà de "
+                           f"{cfg.max_skip_fraction:.1%} ; voir {cfg.out / 'skipped_batches.csv'}")
 
 
 def _validate_and_log(cfg: TrainConfig, model, index, lut5, device, step: int, best: float, full: bool) -> float:
@@ -128,7 +173,7 @@ class StopFlag:
             signal.signal(s, handler)
 
 
-def _log_row(cfg, path, step, epoch, lr, stats, item, wait_ms, dt, batch, device) -> None:
+def _log_row(cfg, path, step, epoch, lr, stats, item, wait_ms, dt, batch, device, n_skipped: int) -> None:
     px = batch.x.shape[0] * batch.x.shape[2] * batch.x.shape[3]
     cuda = device.type == "cuda"
     append_row(path, {"step": step, "epoch": epoch, "lr": lr, "loss": stats.loss, "recon": stats.recon,
@@ -137,7 +182,7 @@ def _log_row(cfg, path, step, epoch, lr, stats, item, wait_ms, dt, batch, device
                       "ms_step": 1000 * dt, "data_ms": item.data_ms, "data_wait_ms": wait_ms,
                       "render_ms": stats.render_ms, "n_chunks": stats.n_chunks,
                       "peak_mem_mb": torch.cuda.max_memory_allocated(device) / 2 ** 20 if cuda else 0.0,
-                      "bin": batch.meta[0]["bin"]}, TRAIN_COLUMNS)  # un lot = une classe de taille
+                      "bin": batch.meta[0]["bin"], "n_skipped": n_skipped}, TRAIN_COLUMNS)  # un lot = une classe de taille
     if cuda:
         torch.cuda.reset_peak_memory_stats(device)  # pic par fenêtre de journalisation
 
@@ -166,6 +211,7 @@ def train(cfg: TrainConfig, resume: bool = False) -> TrainResult:
     data = CellShardDataset(index)
     step = epoch = pos = 0
     best = best_recorded(cfg.out)  # ne jamais écraser un best.pt meilleur
+    skips = SkipCounter()
     resumed = resume and has_checkpoint(cfg.out)
     if resumed:
         ck = load_checkpoint(cfg.out)
@@ -174,7 +220,8 @@ def train(cfg: TrainConfig, resume: bool = False) -> TrainResult:
         sched.load_state_dict(ck["sched"])
         set_rng_state(ck["rng"])
         step, epoch, pos, best = ck["step"], ck["epoch"], ck["pos"], min(ck["best_val"], best)
-        for name in ("train.csv", "val.csv"):
+        skips = SkipCounter(total=ck.get("n_skipped", 0), epoch=ck.get("epoch_skipped", 0))
+        for name in ("train.csv", "val.csv", "skipped_batches.csv"):
             trim_csv(cfg.out / name, step)
         logger.info("reprise au pas %d (époque %d, lot %d)", step, epoch, pos)
     model.train()
@@ -193,8 +240,14 @@ def train(cfg: TrainConfig, resume: bool = False) -> TrainResult:
                     t0 = time.perf_counter()
                     batch = batch_to_device(item.batch, device)
                     peaks = None if item.peaks is None else item.peaks.to(device)
-                    stats = accumulate_step(model, batch, peaks, lut5, step, k_train=cfg.k_train, loss_cfg=cfg.loss,
-                                            render_px_budget=cfg.render_px_budget)
+                    try:
+                        stats = accumulate_step(model, batch, peaks, lut5, step, k_train=cfg.k_train,
+                                                loss_cfg=cfg.loss, render_px_budget=cfg.render_px_budget)
+                    except NonFiniteStep as exc:
+                        _skip_step(cfg, sched, skips, exc, item, index, step + 1, epoch)
+                        step, pos = step + 1, pos + 1
+                        continue
+                    skips.ok()
                     lr = opt.param_groups[0]["lr"]
                     torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.clip)
                     opt.step()
@@ -204,22 +257,24 @@ def train(cfg: TrainConfig, resume: bool = False) -> TrainResult:
                     dt = time.perf_counter() - t0 + wait_ms / 1000
                     step, pos = step + 1, pos + 1
                     if step % cfg.log_every == 0:
-                        _log_row(cfg, cfg.out / "train.csv", step, epoch, lr, stats, item, wait_ms, dt, batch, device)
+                        _log_row(cfg, cfg.out / "train.csv", step, epoch, lr, stats, item, wait_ms, dt, batch, device,
+                                 skips.total)
                     if step % cfg.val_every_steps == 0:
                         best = _validate_and_log(cfg, model, index, lut5, device, step, best, full=False)
                         validated_at = step
                     if time.monotonic() - last_ckpt >= 60 * cfg.checkpoint_every_min:
-                        _save(cfg, model, opt, sched, step, epoch, pos, best)
+                        _save(cfg, model, opt, sched, step, epoch, pos, best, skips)
                         last_ckpt = time.monotonic()
             finally:
                 items.close()
             if pos >= len(batches):
-                epoch, pos = epoch + 1, 0
+                _check_epoch_skips(cfg, skips, len(batches), epoch)
+                epoch, pos, skips.epoch = epoch + 1, 0, 0
                 if flag.signum is None:
                     _validate_and_log(cfg, model, index, lut5, device, step, best, full=True)
         if validated_at != step and flag.signum is None:
             best = _validate_and_log(cfg, model, index, lut5, device, step, best, full=False)
-        _save(cfg, model, opt, sched, step, epoch, pos, best)
+        _save(cfg, model, opt, sched, step, epoch, pos, best, skips)
         stopped_by = flag.signum
     logger.info("terminé : pas %d, époque %d, meilleur nrmse val %.4f", step, epoch, best)
     return TrainResult(step, epoch, best, stopped_by)
@@ -247,6 +302,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--val-max-per-class", type=int, default=500)
     ap.add_argument("--render-px-budget", type=int, default=TrainConfig.render_px_budget)
     ap.add_argument("--prefetch-depth", type=int, default=2)
+    ap.add_argument("--max-consecutive-skips", type=int, default=TrainConfig.max_consecutive_skips)
+    ap.add_argument("--max-skip-fraction", type=float, default=TrainConfig.max_skip_fraction)
     ap.add_argument("--base-ch", type=int, default=EncoderConfig.base_ch)
     ap.add_argument("--lambda-sparsity", type=float, default=LossConfig.lambda_sparsity)
     ap.add_argument("--lambda-binarise", type=float, default=LossConfig.lambda_binarise)
@@ -265,6 +322,7 @@ def config_from_args(a: argparse.Namespace) -> TrainConfig:
         k_train=a.k_train, seed=a.seed, checkpoint_every_min=a.checkpoint_every_min, val_every_steps=a.val_every_steps,
         max_steps=a.max_steps, log_every=a.log_every,
         val_max_per_class=a.val_max_per_class, render_px_budget=a.render_px_budget, prefetch_depth=a.prefetch_depth,
+        max_consecutive_skips=a.max_consecutive_skips, max_skip_fraction=a.max_skip_fraction,
         lut=LogWLutSpec(n=a.lut_n, steps=a.lut_steps, n_r=a.lut_n_r),
         encoder=EncoderConfig(base_ch=a.base_ch, k_train=a.k_train),
         loss=LossConfig(lambda_sparsity=a.lambda_sparsity, lambda_binarise=a.lambda_binarise,

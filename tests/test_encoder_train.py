@@ -1,4 +1,5 @@
 """Boucle d'entraînement de l'encodeur (phase 5 E7) : petits shards, CPU, déterministe."""
+import dataclasses
 import json
 import logging
 import signal
@@ -9,11 +10,12 @@ import pytest
 import torch
 
 from encoder_loss import LossConfig
+import encoder_step
 import encoder_train
 from encoder_train import TrainConfig, build_parser, main, train
 from profile_lut import LogWLutSpec
 from shard_helpers import write_tiny_dir
-from source_encoder import EncoderConfig
+from source_encoder import EncoderConfig, SourceEncoder
 
 TINY_LUT = LogWLutSpec(n=32, steps=60, n_r=32)
 
@@ -201,3 +203,107 @@ def test_train_csv_logs_the_size_class_of_each_batch(make_cfg):
     log = _train_csv(cfg)
     assert "bin" in log.columns and len(log) > 0
     assert log["bin"].astype(str).str.len().gt(0).all()
+
+
+def _nan_encode(monkeypatch, bad_calls):
+    """Remplace encode : logits NaN aux appels dont le numéro (1, 2, ...) satisfait bad_calls."""
+    real, calls = encoder_step.encode, {"n": 0}
+
+    def flaky(model, x):
+        calls["n"] += 1
+        out = real(model, x)
+        if bad_calls(calls["n"]):
+            return dataclasses.replace(out, logits=out.logits * float("nan"))
+        return out
+    monkeypatch.setattr(encoder_step, "encode", flaky)
+
+
+def _weights(path):
+    return {k: v.clone() for k, v in torch.load(path, weights_only=False)["model"].items()}
+
+
+@pytest.mark.unit
+def test_nan_step_is_skipped_weights_unchanged_and_training_continues(make_cfg, monkeypatch, caplog):
+    # Arrange
+    cfg = make_cfg(max_steps=5, max_skip_fraction=1.0)
+    _nan_encode(monkeypatch, lambda n: n == 2)
+    seen = []
+    real_step = torch.optim.AdamW.step
+    monkeypatch.setattr(torch.optim.AdamW, "step", lambda self, *a, **k: (seen.append(1), real_step(self, *a, **k))[1])
+    # Act
+    with caplog.at_level(logging.WARNING):
+        result = train(cfg)
+    # Assert
+    assert result.step == 5 and len(seen) == 4  # l'optimiseur n'a pas tourné au pas écarté
+    log = _train_csv(cfg)
+    assert log["step"].tolist() == [1, 3, 4, 5] and log["n_skipped"].tolist() == [0, 1, 1, 1]
+    skipped = pd.read_csv(cfg.out / "skipped_batches.csv")
+    assert set(skipped["step"]) == {2} and {"epoch", "bin", "shard", "position"} <= set(skipped.columns)
+    assert any("pas 2" in r.getMessage() and r.levelno == logging.WARNING for r in caplog.records)
+
+
+@pytest.mark.unit
+def test_skipped_step_leaves_weights_identical(make_cfg, monkeypatch):
+    cfg = make_cfg(max_steps=1, max_skip_fraction=1.0)
+    _nan_encode(monkeypatch, lambda n: True)
+    train(cfg)
+    fresh = make_cfg(out=cfg.out.parent / "fresh", max_steps=1)
+    monkeypatch.undo()
+    torch.manual_seed(fresh.seed)
+    init = SourceEncoder(fresh.encoder).state_dict()
+    after = _weights(cfg.out / "last.pt")
+    assert all(torch.equal(init[k], after[k]) for k in init)
+
+
+@pytest.mark.unit
+def test_too_many_consecutive_skips_abort(make_cfg, monkeypatch):
+    cfg = make_cfg(max_steps=100, epochs=100, max_skip_fraction=1.0, max_consecutive_skips=20)
+    _nan_encode(monkeypatch, lambda n: True)
+    with pytest.raises(RuntimeError, match="21 pas consécutifs"):
+        train(cfg)
+    assert len(pd.read_csv(cfg.out / "skipped_batches.csv")["step"].unique()) == 21
+
+
+@pytest.mark.unit
+def test_twenty_consecutive_skips_are_tolerated(make_cfg, monkeypatch):
+    cfg = make_cfg(max_steps=22, epochs=100, max_skip_fraction=1.0, max_consecutive_skips=20)
+    _nan_encode(monkeypatch, lambda n: n <= 20)
+    assert train(cfg).step == 22
+
+
+@pytest.mark.unit
+def test_skipped_fraction_above_limit_aborts_at_epoch_end(make_cfg, monkeypatch):
+    cfg = make_cfg(max_steps=6, max_skip_fraction=0.01)
+    _nan_encode(monkeypatch, lambda n: n == 1)
+    with pytest.raises(RuntimeError, match="écartés"):
+        train(cfg)
+
+
+@pytest.mark.unit
+def test_non_finite_gradient_hook_step_is_skipped(make_cfg, monkeypatch):
+    cfg = make_cfg(max_steps=3, max_skip_fraction=1.0)
+    real, calls = encoder_step.accumulate_step, {"n": 0}
+
+    def with_hook(model, *a, **k):
+        calls["n"] += 1
+        handle = next(model.parameters()).register_hook(lambda g: g * float("nan")) if calls["n"] == 1 else None
+        try:
+            return real(model, *a, **k)
+        finally:
+            if handle:
+                handle.remove()
+    monkeypatch.setattr(encoder_train, "accumulate_step", with_hook)
+    assert train(cfg).step == 3
+    assert _train_csv(cfg)["n_skipped"].iloc[-1] == 1
+
+
+@pytest.mark.unit
+def test_resume_keeps_cumulative_n_skipped(make_cfg, monkeypatch):
+    cfg = make_cfg(max_steps=3, max_skip_fraction=1.0)
+    _nan_encode(monkeypatch, lambda n: n == 1)
+    train(cfg)
+    assert torch.load(cfg.out / "last.pt", weights_only=False)["n_skipped"] == 1
+    monkeypatch.undo()
+    train(replace(cfg, max_steps=5), resume=True)
+    log = _train_csv(cfg)
+    assert log["step"].tolist() == [2, 3, 4, 5] and log["n_skipped"].tolist() == [1, 1, 1, 1]

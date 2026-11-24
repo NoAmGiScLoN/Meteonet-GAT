@@ -44,6 +44,15 @@ class StepStats:
     n_chunks: int
 
 
+class NonFiniteStep(RuntimeError):
+    """Paramètres, portes, perte ou gradient non finis : le pas est à écarter (poids inchangés)."""
+
+
+def _require_finite(name: str, *tensors: torch.Tensor) -> None:
+    if not all(bool(torch.isfinite(t).all()) for t in tensors):
+        raise NonFiniteStep(f"{name} non finis")
+
+
 def encode(model: SourceEncoder, x: torch.Tensor) -> HeadOut:
     """Passage de l'encodeur : bf16 pour le CNN sur CUDA seulement ; têtes en float32."""
     with torch.autocast(device_type=x.device.type, dtype=torch.bfloat16, enabled=x.device.type == "cuda"):
@@ -86,6 +95,7 @@ def _chunk(model: SourceEncoder, batch: Batch, peaks, lut5, step: int, k_train: 
     """Perte d'un morceau (normalisée par le lot entier) et rétropropagation ; None si le rendu dépasse le budget."""
     out = encode(model, batch.x)
     params, gate, ok = decode_candidates(out, k_train, batch.crop_hw, model.cfg)
+    _require_finite("paramètres ou portes", params, gate)  # avant le rendu (_check_gate reste le filet)
     t, n = batch.targets, batch.x.shape[0]
     if n > 1 and render_cost(params, gate, t.Hm, t.Wm) > budget:
         return None
@@ -105,6 +115,7 @@ def _chunk(model: SourceEncoder, batch: Batch, peaks, lut5, step: int, k_train: 
     else:
         heat = torch.zeros((), device=rec.device)
     total = recon + cfg.lambda_sparsity * sparse + cfg.binarise_weight(step) * binar + cfg.lambda_heatmap * heat
+    _require_finite("perte", total)
     total.backward()
     active = ((gate.detach() >= ACTIVE_THRESHOLD) & ok).sum(1).float()
     return {"loss": float(total.detach()), "recon": float(recon.detach()), "sparsity": float(sparse.detach()),
@@ -140,6 +151,7 @@ def _attempt(model, batch: Batch, peaks, lut5, step, k_train, cfg, budget, chunk
             return "render"
         for key, value in res.items():
             acc[key] = acc.get(key, 0.0) + value
+    _require_finite("gradients", *(p.grad for p in model.parameters() if p.grad is not None))
     return StepStats(loss=acc["loss"], recon=acc["recon"], sparsity=acc["sparsity"], binarise=acc["binarise"],
                      heatmap=acc["heatmap"], k_active=acc["k"] / n, params_per_area=acc["ppa"] / n,
                      render_ms=acc["render_ms"], n_chunks=chunks)
@@ -148,12 +160,17 @@ def _attempt(model, batch: Batch, peaks, lut5, step, k_train, cfg, budget, chunk
 def accumulate_step(model: SourceEncoder, batch: Batch, peaks: torch.Tensor | None, lut5: torch.Tensor, step: int, *,
                     k_train: int, loss_cfg: LossConfig, render_px_budget: int, chunks: int = 1) -> StepStats:
     """Calcule la perte du lot et accumule les gradients dans model (remis à zéro au début) ; relance en
-    doublant les morceaux si le rendu dépasse render_px_budget ou si la mémoire manque."""
+    doublant les morceaux si le rendu dépasse render_px_budget ou si la mémoire manque.
+    Lève NonFiniteStep (gradients remis à zéro) si paramètres, portes, perte ou gradients ne sont pas finis."""
     n = batch.x.shape[0]
     chunks = max(1, min(chunks, n))
     while True:
         model.zero_grad(set_to_none=True)
-        result = _attempt(model, batch, peaks, lut5, step, k_train, loss_cfg, render_px_budget, chunks)
+        try:
+            result = _attempt(model, batch, peaks, lut5, step, k_train, loss_cfg, render_px_budget, chunks)
+        except NonFiniteStep:
+            model.zero_grad(set_to_none=True)  # aucun gradient partiel ne doit survivre au pas écarté
+            raise
         if isinstance(result, StepStats):
             return result
         if chunks >= n:
