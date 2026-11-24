@@ -303,3 +303,14 @@ def test_benchmark_forward_render_backward_k256_large_radii(size, lut5):
     params, gate, _ = decode_candidates(out, 256, [(size, size)], cfg)
     vsf.render_windowed(params, gate, size, size, "diffusion", lut5).sum().backward()
     print(f"BENCH k=256 rayons 3.5-30 {size}x{size} : {time.perf_counter() - t0:.2f} s")
+
+
+@pytest.mark.unit
+def test_soft_clamp_is_near_identity_for_small_values_and_bounded():
+    from source_encoder import HEAD_SOFT_CLAMP, soft_clamp
+    x = torch.linspace(-1.0, 1.0, 101)
+    assert (soft_clamp(x) - x).abs().max() < 1e-3
+    assert (soft_clamp(torch.linspace(-3, 3, 61)) - torch.linspace(-3, 3, 61)).abs().max() < 0.005
+    # c = 50 : reprise du point de reprise existant quasi inchangée (|x| = 5 bouge de < 0,02)
+    assert (soft_clamp(torch.linspace(-5, 5, 101)) - torch.linspace(-5, 5, 101)).abs().max() < 0.02
+    assert soft_clamp(torch.tensor([1e9, -1e9])).abs().max() <= HEAD_SOFT_CLAMP

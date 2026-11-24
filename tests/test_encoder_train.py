@@ -272,13 +272,113 @@ def test_twenty_consecutive_skips_are_tolerated(make_cfg, monkeypatch):
 
 
 @pytest.mark.unit
-def test_skipped_fraction_above_limit_aborts_at_epoch_end(make_cfg, monkeypatch):
+def test_skipped_fraction_is_checked_as_you_go_with_floor_of_one(make_cfg, monkeypatch):
+    # 3 lots par époque, 1 % -> seuil max(1, floor(0.03)) = 1 : un pas écarté passe, le deuxième arrête l'époque
     cfg = make_cfg(max_steps=6, max_skip_fraction=0.01)
-    _nan_encode(monkeypatch, lambda n: n == 1)
+    _nan_encode(monkeypatch, lambda n: n in (1, 2))
     with pytest.raises(RuntimeError, match="écartés"):
         train(cfg)
+    assert (cfg.out / "last.pt").exists()  # (g) point de reprise écrit avant d'abandonner
+    assert torch.load(cfg.out / "last.pt", weights_only=False)["step"] == 2
 
 
+@pytest.mark.unit
+def test_single_skip_under_floor_is_tolerated(make_cfg, monkeypatch):
+    cfg = make_cfg(max_steps=6, max_skip_fraction=0.01)
+    _nan_encode(monkeypatch, lambda n: n == 1)
+    assert train(cfg).step == 6
+
+
+@pytest.mark.unit
+def test_abort_on_consecutive_skips_writes_last_good_checkpoint(make_cfg, monkeypatch):
+    cfg = make_cfg(max_steps=100, epochs=100, max_skip_fraction=1.0, max_consecutive_skips=2)
+    _nan_encode(monkeypatch, lambda n: n > 1)
+    with pytest.raises(RuntimeError, match="3 pas consécutifs"):
+        train(cfg)
+    ck = torch.load(cfg.out / "last.pt", weights_only=False)
+    assert ck["step"] == 4 and ck["n_skipped"] == 3
+    assert all(torch.isfinite(v).all() for v in ck["model"].values() if v.is_floating_point())
+
+
+@pytest.mark.unit
+def test_skipped_step_still_checkpoints_on_interval(make_cfg, monkeypatch):
+    cfg = make_cfg(max_steps=3, max_skip_fraction=1.0, checkpoint_every_min=0.0)
+    _nan_encode(monkeypatch, lambda n: n == 1)
+    saved, real = [], encoder_train.save_checkpoint
+    monkeypatch.setattr(encoder_train, "save_checkpoint", lambda out, payload: (saved.append(payload["step"]), real(out, payload))[1])
+    train(cfg)
+    assert 1 in saved  # le pas 1 est écarté mais passe par la logique de point de reprise
+
+
+@pytest.mark.unit
+def test_skipped_step_still_goes_through_validation(make_cfg, monkeypatch):
+    cfg = make_cfg(max_steps=2, max_skip_fraction=1.0, val_every_steps=1)
+    _nan_encode(monkeypatch, lambda n: n == 1)
+    train(cfg)
+    assert 1 in set(pd.read_csv(cfg.out / "val.csv")["step"])
+
+
+@pytest.mark.unit
+def test_grad_spike_is_skipped_with_reason(make_cfg, monkeypatch):
+    cfg = make_cfg(max_steps=8, epochs=10, max_skip_fraction=1.0, spike_window=4)
+    real, calls = torch.nn.utils.clip_grad_norm_, {"n": 0}
+
+    def spiky(params, max_norm, *a, **k):
+        calls["n"] += 1
+        norm = real(params, max_norm, *a, **k)
+        return norm * 1e6 if calls["n"] == 6 else norm
+    monkeypatch.setattr(torch.nn.utils, "clip_grad_norm_", spiky)
+    assert train(cfg).step == 8
+    skipped = pd.read_csv(cfg.out / "skipped_batches.csv")
+    assert set(skipped["reason"]) == {"spike"} and set(skipped["step"]) == {6}
+    log = _train_csv(cfg)
+    assert (log["grad_norm"] > 0).all() and 6 not in log["step"].tolist()
+    for col in ("max_abs_logit", "max_raw_A", "max_raw_a", "max_raw_b", "max_raw_w"):
+        assert (log[col] >= 0).all()
+
+
+@pytest.mark.unit
+def test_nan_weights_after_opt_step_are_restored_from_snapshot(make_cfg, monkeypatch):
+    cfg = make_cfg(max_steps=4, max_skip_fraction=1.0)
+    real, calls = torch.optim.AdamW.step, {"n": 0}
+
+    def poison(self, *a, **k):
+        out = real(self, *a, **k)
+        calls["n"] += 1
+        if calls["n"] == 2:
+            next(iter(self.param_groups[0]["params"])).data.fill_(float("nan"))
+        return out
+    monkeypatch.setattr(torch.optim.AdamW, "step", poison)
+    train(cfg)
+    ck = torch.load(cfg.out / "last.pt", weights_only=False)
+    assert all(torch.isfinite(v).all() for v in ck["model"].values() if v.is_floating_point())
+    assert ck["n_skipped"] == 1
+    assert "poids non finis" in pd.read_csv(cfg.out / "skipped_batches.csv")["reason"].iloc[0]
+
+
+@pytest.mark.unit
+def test_resume_from_old_csv_without_new_columns_is_backfilled(make_cfg):
+    cfg = make_cfg(max_steps=3)
+    train(cfg)
+    old = _train_csv(cfg)
+    old.drop(columns=["n_skipped", "grad_norm"]).to_csv(cfg.out / "train.csv", index=False)
+    rc = json.loads((cfg.out / "run_config.json").read_text())
+    for key in ("max_consecutive_skips", "max_skip_fraction", "spike_window", "spike_factor"):
+        rc.pop(key)  # run_config d'une version antérieure
+    (cfg.out / "run_config.json").write_text(json.dumps(rc))
+    train(replace(cfg, max_steps=5), resume=True)
+    log = _train_csv(cfg)
+    assert log["step"].tolist() == [1, 2, 3, 4, 5]
+    assert log["n_skipped"].tolist() == [0] * 5
+    assert log["grad_norm"].iloc[:3].isna().all() and log["grad_norm"].iloc[3:].notna().all()
+    assert list(log.columns) == encoder_train.TRAIN_COLUMNS
+
+
+@pytest.mark.unit
+def test_late_chunk_nan_in_train_step_leaves_no_partial_grads(make_cfg, monkeypatch):
+    cfg = make_cfg(max_steps=3, max_skip_fraction=1.0, render_px_budget=1)  # force des morceaux
+    _nan_encode(monkeypatch, lambda n: n == 2)
+    assert train(cfg).step == 3
 @pytest.mark.unit
 def test_non_finite_gradient_hook_step_is_skipped(make_cfg, monkeypatch):
     cfg = make_cfg(max_steps=3, max_skip_fraction=1.0)

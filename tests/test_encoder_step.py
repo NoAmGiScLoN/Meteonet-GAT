@@ -153,3 +153,24 @@ def test_non_finite_gradient_raises_and_clears_grads(setup, lut5):
         _run(setup, lut5)
     handle.remove()
     assert all(p.grad is None for p in setup[0].parameters())
+
+
+@pytest.mark.unit
+def test_nan_in_late_chunk_leaves_no_partial_grads(setup, lut5, monkeypatch):
+    real, calls = encoder_step.encode, {"n": 0}
+
+    def late_nan(model, x):
+        calls["n"] += 1
+        out = real(model, x)
+        return dataclasses.replace(out, logits=out.logits * float("nan")) if calls["n"] == 2 else out
+    monkeypatch.setattr(encoder_step, "encode", late_nan)
+    with pytest.raises(encoder_step.NonFiniteStep):
+        _run(setup, lut5, chunks=2)
+    assert calls["n"] == 2 and all(p.grad is None for p in setup[0].parameters())
+
+
+@pytest.mark.unit
+def test_step_stats_report_head_extremes(setup, lut5):
+    stats, _ = _run(setup, lut5)
+    for name in ("max_abs_logit", "max_raw_A", "max_raw_a", "max_raw_b", "max_raw_w"):
+        assert getattr(stats, name) > 0

@@ -131,3 +131,20 @@ def trim_csv(path: Path, last_step: int) -> None:
         tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
         kept.to_csv(tmp, index=False)
         os.replace(tmp, path)
+
+
+def ensure_columns(path: Path, columns: Sequence[str], fill: Mapping[str, Any] | None = None) -> None:
+    """Réécrit (atomiquement) un CSV dont l'en-tête diffère de `columns` : colonnes manquantes ajoutées
+    (valeur de `fill`, sinon NaN), colonnes inconnues supprimées, ordre de `columns`. Sans effet si identique."""
+    if not path.exists() or list(pd.read_csv(path, nrows=0).columns) == list(columns):
+        return
+    frame = pd.read_csv(path)
+    for name, value in (fill or {}).items():
+        if name in columns and name not in frame.columns:
+            frame[name] = value
+    tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        frame.reindex(columns=list(columns)).to_csv(tmp, index=False)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)

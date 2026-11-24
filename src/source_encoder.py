@@ -95,6 +95,15 @@ class HeadOut:
     raw_w: torch.Tensor
 
 
+HEAD_SOFT_CLAMP = 50.0  # borne douce des sorties brutes non bornées (logit, A, w) : c·tanh(x/c)
+
+
+def soft_clamp(x: torch.Tensor, c: float = HEAD_SOFT_CLAMP) -> torch.Tensor:
+    """c·tanh(x/c) : quasi identité près de 0 (écart < 1e-3 pour |x| < 1, ~0.02 à |x| = 3), bornée par ±c ;
+    empêche une sortie de tête d'exploser en inf/NaN."""
+    return c * torch.tanh(x / c)
+
+
 def _block(c_in: int, c_out: int) -> nn.Sequential:
     return nn.Sequential(
         nn.Conv2d(c_in, c_out, 3, padding=1), nn.GroupNorm(GROUPS, c_out), nn.ReLU(inplace=True),
@@ -138,8 +147,9 @@ class SourceEncoder(nn.Module):
             z = block(torch.cat([F.interpolate(z, scale_factor=2, mode="nearest"), skip], 1))
         with torch.autocast(device_type=z.device.type, enabled=False):  # positions et rayons en fp32
             h = self.head(z.float())
-        return HeadOut(logits=h[:, 0:1], offsets=torch.tanh(h[:, 1:3]), raw_A=h[:, 3:4], raw_a=h[:, 4:5],
-                       raw_b=h[:, 5:6], cos2t=h[:, 6:7], sin2t=h[:, 7:8], raw_w=h[:, 8:9])
+        return HeadOut(logits=soft_clamp(h[:, 0:1]), offsets=torch.tanh(h[:, 1:3]), raw_A=soft_clamp(h[:, 3:4]),
+                       raw_a=h[:, 4:5], raw_b=h[:, 5:6], cos2t=h[:, 6:7], sin2t=h[:, 7:8],
+                       raw_w=soft_clamp(h[:, 8:9]))
 
 
 def count_parameters(model: nn.Module) -> int:

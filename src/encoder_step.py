@@ -42,14 +42,26 @@ class StepStats:
     params_per_area: float
     render_ms: float
     n_chunks: int
+    max_abs_logit: float = 0.0  # extrêmes des sorties brutes de têtes (alerte précoce d'une divergence)
+    max_raw_A: float = 0.0
+    max_raw_a: float = 0.0
+    max_raw_b: float = 0.0
+    max_raw_w: float = 0.0
+    grad_norm: float = 0.0  # norme avant écrêtage, renseignée par la boucle d'entraînement
 
 
 class NonFiniteStep(RuntimeError):
     """Paramètres, portes, perte ou gradient non finis : le pas est à écarter (poids inchangés)."""
 
 
+def all_finite(tensors) -> bool:
+    """Tous les tenseurs sont finis ; une seule synchronisation hôte-device pour l'ensemble."""
+    flags = [torch.isfinite(t).all() for t in tensors]
+    return not flags or bool(torch.stack(flags).all())
+
+
 def _require_finite(name: str, *tensors: torch.Tensor) -> None:
-    if not all(bool(torch.isfinite(t).all()) for t in tensors):
+    if not all_finite(tensors):
         raise NonFiniteStep(f"{name} non finis")
 
 
@@ -120,7 +132,18 @@ def _chunk(model: SourceEncoder, batch: Batch, peaks, lut5, step: int, k_train: 
     active = ((gate.detach() >= ACTIVE_THRESHOLD) & ok).sum(1).float()
     return {"loss": float(total.detach()), "recon": float(recon.detach()), "sparsity": float(sparse.detach()),
             "binarise": float(binar.detach()), "heatmap": float(heat.detach()), "k": float(active.sum()),
-            "ppa": float((active * model.cfg.n_par / batch.areas).sum()), "render_ms": render_ms}
+            "ppa": float((active * model.cfg.n_par / batch.areas).sum()), "render_ms": render_ms,
+            **_head_extremes(out)}
+
+
+MAX_KEYS = ("max_abs_logit", "max_raw_A", "max_raw_a", "max_raw_b", "max_raw_w")
+
+
+def _head_extremes(out: HeadOut) -> dict[str, float]:
+    """Plus grandes valeurs absolues des sorties brutes (un seul transfert vers l'hôte)."""
+    heads = (out.logits, out.raw_A, out.raw_a, out.raw_b, out.raw_w)
+    values = torch.stack([h.detach().abs().max() for h in heads]).tolist()
+    return dict(zip(MAX_KEYS, values))
 
 
 def _free_memory() -> None:
@@ -150,11 +173,11 @@ def _attempt(model, batch: Batch, peaks, lut5, step, k_train, cfg, budget, chunk
         if res is None:
             return "render"
         for key, value in res.items():
-            acc[key] = acc.get(key, 0.0) + value
+            acc[key] = max(acc.get(key, 0.0), value) if key in MAX_KEYS else acc.get(key, 0.0) + value
     _require_finite("gradients", *(p.grad for p in model.parameters() if p.grad is not None))
     return StepStats(loss=acc["loss"], recon=acc["recon"], sparsity=acc["sparsity"], binarise=acc["binarise"],
                      heatmap=acc["heatmap"], k_active=acc["k"] / n, params_per_area=acc["ppa"] / n,
-                     render_ms=acc["render_ms"], n_chunks=chunks)
+                     render_ms=acc["render_ms"], n_chunks=chunks, **{k: acc[k] for k in MAX_KEYS})
 
 
 def accumulate_step(model: SourceEncoder, batch: Batch, peaks: torch.Tensor | None, lut5: torch.Tensor, step: int, *,
