@@ -63,18 +63,20 @@ def _group_rows(group, encoded, variant, level, lut5, device, cfg, seed) -> list
 
 def _groups(cells):
     for b, (name, *_) in enumerate(vsf.BINS):
+        if not any(c["bin"] == name for c in cells):
+            continue
         members = sorted((c for c in cells if c["bin"] == name), key=lambda c: c["rate"].shape)
         for i in range(0, len(members), vsf.GROUP[name]):
             yield members[i:i + vsf.GROUP[name]], b * SEED_STRIDE + i
 
 
-def run(cells, encoded, iters, lut5, device, cfg) -> pd.DataFrame:
+def run(cells, encoded, iters, lut5, device, cfg, variants=tuple(VARIANTS)) -> pd.DataFrame:
     first, seed = next(_groups(cells))
-    for variant in VARIANTS:  # échauffement jetable : coûts de premier appel hors mesure, pour chaque variante
+    for variant in variants:  # échauffement jetable : coûts de premier appel hors mesure, pour chaque variante
         _group_rows(first[:1], encoded, variant, 1, lut5, device, cfg, seed)
     rows: list[dict] = []
     for level in iters:  # niveaux à l'extérieur : les variantes d'un niveau tournent dans le même état machine
-        for variant in VARIANTS:
+        for variant in variants:
             for group, seed in _groups(cells):
                 rows += _group_rows(group, encoded, variant, level, lut5, device, cfg, seed)
             logger.info("raffinement %d, variante %s terminé", level, variant)
@@ -116,6 +118,9 @@ def main() -> None:
     ap.add_argument("--e5", type=Path, nargs=2, required=True, metavar=("DOSSIER_C050", "DOSSIER_GE5000"))
     ap.add_argument("--iters", type=int, nargs="+", default=list(DEFAULT_ITERS))
     ap.add_argument("--lut-dir", type=Path, default=Path("results/03_variable_sources"))
+    ap.add_argument("--bins", nargs="+", choices=[b[0] for b in vsf.BINS], default=None,
+                    help="classes à sonder (défaut : toutes)")
+    ap.add_argument("--variants", nargs="+", choices=list(VARIANTS), default=list(VARIANTS))
     ap.add_argument("--device", default="cpu")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
@@ -126,11 +131,13 @@ def main() -> None:
     lut5 = load_or_build_logw_lut(LogWLutSpec(), a.lut_dir)["lut"][None, None].to(device)
     cells = _load_sample(a.sample)
     e5 = load_e5({"probe": tuple(a.e5)})
-    check_pairing(e5, cells)
+    check_pairing(e5, cells)  # sur l'échantillon complet, avant filtrage par classe
+    if a.bins:
+        cells = [c for c in cells if c["bin"] in a.bins]
     with torch.no_grad():
         encoded = encode_cells(model, cfg, cells, device)
     logger.info("%d cellules encodées", len(cells))
-    df = run(cells, encoded, a.iters, lut5, device, cfg)
+    df = run(cells, encoded, a.iters, lut5, device, cfg, tuple(a.variants))
     a.out.mkdir(parents=True, exist_ok=True)
     df.to_csv(a.out / "cells.csv", index=False)
     summary = summarize(df, e5)
