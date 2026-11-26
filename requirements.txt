@@ -5,3 +5,4 @@ pandas
 matplotlib
 torch          # Jetson: install from https://download.pytorch.org/whl/cu132 (see README)
 openpyxl       # only for tools/export_excel.py
+pyarrow        # parquet output of src/track_run.py

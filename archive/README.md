@@ -12,6 +12,7 @@ Index of the completed experiments. Each folder holds the archived outputs of on
 | E3 — diff7 and iterations per wave | Can `τ` be dropped? Which `w` table? How many iterations per wave? | [D17–D19](../README.md#9-decision-log) | [E3 report](E3_diff7_convergence/report.md) |
 | E4 — optimizer, diff7 stability, noise floor | Does a decaying learning rate help? How stable is diff7? What error does the data allow? | [D20–D22](../README.md#9-decision-log) | [E4 report](E4_optimizer_stability_floor/report.md) |
 | E5 — adaptive K per cell | Does growing K per cell to a target error beat fixed K? Which compression limit and cap? | [D23–D25](../README.md#9-decision-log) | [E5 report](E5_adaptive_k/report.md) |
+| E6 — tracker v2 | Can a tracker with merge/split lineage, hysteresis and a one-map gap tolerance run over 2016–2018, and how good are its tracks? | [D26–D29](../README.md#9-decision-log) | [E6 report](E6_tracker_v2/report.md) |
 
 Nothing in this folder has been deleted: the outputs were moved here from `results/` with `git mv`, so the rename
 history is kept. The code that produced them was not moved. It is pinned by the git tag `v0-jetson-baseline`

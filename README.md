@@ -257,17 +257,27 @@ Segmentation labels each map independently. Tracking assigns a persistent `track
 **Outcome:** large cells keep their identity over the six maps (30 min), including through several-fold
 area changes. This is enough to build the cell pairs of the stability test.
 
-**Not yet handled:**
+**Not handled by this first tracker:** merges and splits, edge exits distinguished from decay, gap tolerance and
+quantitative validation. Each LSTM sequence is a track, so these gaps matter directly for the model: a track
+broken by a missed detection loses its history, a merge needs a rule to combine the parents' hidden states and a
+split one for the children to inherit theirs.
 
-- merges and splits (logged as a death plus a birth, with no parent/child table);
-- exits through the map edge, which are not distinguished from decay;
-- gap tolerance (a cell missed on one map gets a new id);
-- quantitative validation (checks so far are visual only).
+### 4.1 Tracker v2 (E6, D26–D29)
 
-These gaps matter directly for the forecasting model, because each LSTM sequence is a track. A track broken
-by a missed detection loses its history. A merge needs a rule to combine the two parents' hidden states, and
-a split needs a rule for the children to inherit their parent's state. Completing the tracker is therefore a
-prerequisite for the model, not a refinement.
+Code: `src/tracker_v2.py`, driver `src/track_run.py`, metrics `src/track_metrics.py` — report:
+[E6](archive/E6_tracker_v2/report.md).
+
+- **Lineage:** overlap-based association (≥ 10 % of both objects) with a parent/child table; in a merge or split
+  the largest rain mass keeps the id (D26).
+- **Hysteresis:** tracks start at 50 px and continue down to 35 px (D27).
+- **Gaps:** a missed track coasts 1 map; a time gap > 15 min ends every track (D28).
+- **Truncated cells** are tracked and flagged; entries and exits through the edge or missing data are events (D29).
+- **Motion:** per-track smoothed velocity; young tracks use the map's phase-correlation motion.
+
+Over 2016–2018 (315,597 maps, 7.5 h on a CPU): 4.53 M tracked cells in 614,595 tracks; median length 3 / 8 / 15 / 31
+maps by size class; tracks longer than 3 maps carry 98 % of the rain mass. 35 of 40 reviewed events are correct
+and identities are consistent in all 40. Known gap: up to 10 % of deaths (an upper bound) may be absorptions by a
+larger neighbour without a merge link.
 
 ---
 
@@ -629,6 +639,10 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
 | D23 | Adaptive K is the default fitter: sources added wave by wave until nrmse ≤ 0.1, cap or compression limit; pruning at 1 % of the cell peak | Beats fixed K per class by 0.03–0.06 on ≥ 1,000 px cells and matches it on 200–1,000 px, in 2016 and 2017 | 9 | [E5 report](archive/E5_adaptive_k/report.md) |
 | D24 | Compression limit n_params ≤ 0.5 × area in every class | 0.25 held 50–200 px cells at K ≈ 2 (nrmse 0.26); 0.5 brings them to 0.16–0.17, an accepted trade since small cells weigh little in the global movement | 9 | [E5 report](archive/E5_adaptive_k/report.md) |
 | D25 | Keep the cap at 128 sources per cell | Cap 256 brings the 10 largest cells from 0.136 to 0.098 but was not adopted; ≥ 5,000 px stays at 0.110 (2016) / 0.137 (2017) | 9 | [E5 report](archive/E5_adaptive_k/report.md) |
+| D26 | Tracker v2 replaces the E0 tracker: overlap-based association with a lineage table; in merges and splits the largest rain mass keeps the id | Merges, splits and their parents become explicit for the LSTM; 35 / 40 reviewed events correct, identities consistent in all 40 | 4.1 | [E6 report](archive/E6_tracker_v2/report.md) |
+| D27 | Size hysteresis: tracks start at 50 px and continue down to 35 px | Keeps shrinking cells on their track instead of ending them at the D4 threshold | 4.1 | [E6 report](archive/E6_tracker_v2/report.md) |
+| D28 | Coast 1 map; a time gap > 15 min ends every track | 12 % of coasting tracks are found again; a 2-map coast would recover 8.8 % of the tracks that die after coasting | 4.1 | [E6 report](archive/E6_tracker_v2/report.md) |
+| D29 | Truncated cells are tracked and flagged; entries and exits through the grid edge or missing data are events | Edge exits are no longer mistaken for decay (94 % of exits end on a truncated detection) | 4.1 | [E6 report](archive/E6_tracker_v2/report.md) |
 
 **Node layout under consideration** (panel ④ of the pipeline figure in §1.2):
 
@@ -646,8 +660,8 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
   but small differences should not be over-interpreted.
 - **Data coverage.** Four months over two years, in a single region.
 - **Direct fitting is an upper bound.** A learned source encoder will do somewhat worse.
-- **The tracker is preliminary** (Section 4). Merges, splits and missed detections directly affect the
-  LSTM sequences.
+- **Tracker lineage is incomplete** (§4.1). Up to 10 % of deaths may be absorptions by a larger neighbour
+  without a merge link, and the switch proxies are not ground truth beyond 40 reviewed events.
 - **The forecasting model is not built yet.** The requirements in §1.3 are derived from its planned design
   and will be revisited once it is trained.
 - **Units.** The 5-min accumulation period of `R` is inferred from the time step. If it were different, the
@@ -677,8 +691,9 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
 3. **Warm-start fits along tracks,** then repeat the stability test.
 4. **Train an amortised source encoder,** for example a fully convolutional detector pre-trained on
    synthetic cells and followed by a short refinement fit, to process the full dataset.
-5. **Complete the tracker,** a prerequisite for the LSTM sequences: merge/split events with a parent
-   table, edge entries and exits, and a one-frame gap tolerance.
+5. ~~**Complete the tracker**~~ Done: tracker v2 (D26–D29, [E6 report](archive/E6_tracker_v2/report.md)), with
+   merge/split lineage, edge and missing-data events and a one-map coast over all of 2016–2018. Open point: a merge
+   test when a coasting track ends next to a larger cell (up to 10 % of deaths).
 6. **Re-score the autoencoder at native resolution** for a fair comparison.
 7. **Build the forecasting model:**
    - a permutation-invariant set encoder per node;
@@ -701,7 +716,17 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
 ├── DATA/                          # MeteoNet raw data (not versioned, 5.6 GB)
 ├── src/
 │   ├── cell_delimitation.py       # loading, 1 mm/h segmentation, per-cell features   → results/01
-│   ├── track_cells.py             # tracker                                           → results/01
+│   ├── track_cells.py             # first tracker (E0)                                → results/01
+│   ├── frame_stream.py            # maps across monthly files, with time-gap flags (E6)
+│   ├── motion.py                  # phase-correlation map motion (E6)
+│   ├── tracker_state.py           # frozen tracker state and TrackerConfig (E6)
+│   ├── lineage.py                 # overlap links, merges / splits, edge events (E6)
+│   ├── tracker_v2.py              # one tracker v2 step (E6, D26–D29)
+│   ├── track_run.py               # resumable monthly tracking driver, parquet outputs (E6) → results/09
+│   ├── track_tables.py            # loading of tracker outputs for analysis (E6)
+│   ├── track_metrics.py           # track lengths, events, switch proxies, coasts, review sheet (E6)
+│   ├── track_flicker.py           # flicker metric: tracks a 2-map coast would recover (E6)
+│   ├── track_review.py            # visual review sheets of sampled events (E6)
 │   ├── cell_dataset.py            # 64×64 patch dataset (Experiment 1)                → results/02/cells.npz
 │   ├── compression_benchmark.py   # Experiment 1                                      → results/02
 │   ├── variable_source_fit.py     # Experiment 2, source fits (default arm diff7, D17; 200/500 iterations per wave by size, D19)
@@ -736,7 +761,8 @@ to diffusion sources at 48 parameters (0.137 / 0.213 / 0.321 / 0.450). The compa
 │   │   └── 02_jetson_baseline/    # results/, report.md (full Jetson programme)
 │   ├── E3_diff7_convergence/      # results/, report.md (diff7, w tables, iterations per wave; tag v1-diff7-convergence)
 │   ├── E4_optimizer_stability_floor/ # results/, report.md (lr schedule, diff7 stability, noise floor; tag v2-sessionA)
-│   └── E5_adaptive_k/             # results/, report.md (adaptive K, compression, cap; tag v3-sessionB)
+│   ├── E5_adaptive_k/             # results/, report.md (adaptive K, compression, cap; tag v3-sessionB)
+│   └── E6_tracker_v2/             # results/, report.md, end_pattern.py (tracker v2 over 2016–2018)
 └── results/                       # git-ignored: rebuildable inputs + new runs (see results/README.md)
     ├── 01_segmentation_tracking/  # new runs (archived outputs: archive/E0_segmentation_tracking/)
     ├── 02_fixed_vector_benchmark/ # input cells.npz; new runs
@@ -760,6 +786,8 @@ python scripts/build_samples.py        # needs MeteoNet in DATA/NW_rainfall_<yea
 
 python src/cell_delimitation.py --start "2016-01-01 12:00" --n-frames 3
 python src/track_cells.py --start "2016-01-01 12:00" --n-frames 6
+PYTHONPATH=src python src/track_run.py --start 2016-01 --end 2018-12 --out results/09_tracking_v2   # E6, ≈ 7.5 h CPU
+PYTHONPATH=src python src/track_metrics.py results/09_tracking_v2                                   # metrics + review sheet
 
 python src/compression_benchmark.py --arms mean pca zernike ae diffusion --dims 6 12 18 30 48   # ≈ 1.5 h CPU (gmm arm removed, see D12)
 
