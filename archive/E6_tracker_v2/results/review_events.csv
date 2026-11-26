@@ -1,0 +1,41 @@
+event,t,track_id,area,page,ok,note
+birth,2016-03-01 12:35:00,69366,51,1,oui,
+birth,2016-10-16 15:20:00,172816,61,1,doute,"piste d une trame collée au bord d une grande cellule, sans lien de scission : probable fragment détaché"
+birth,2017-02-12 21:55:00,233883,66,1,oui,
+birth,2018-09-20 21:45:00,550891,55,1,oui,
+death,2016-01-20 06:30:00,30712,52,1,oui,
+death,2017-01-13 21:35:00,214475,45,1,oui,
+death,2017-08-02 02:30:00,307343,59,1,oui,
+death,2018-12-23 09:20:00,614081,68,1,oui,
+entry_edge,2016-02-08 05:30:00,46825,65,2,oui,
+entry_edge,2016-02-09 02:25:00,48738,97,2,oui,
+entry_edge,2018-06-06 15:25:00,526266,51,2,oui,
+entry_edge,2018-12-07 01:55:00,598496,146,2,oui,
+exit_edge,2016-11-20 06:05:00,195770,366,2,doute,"fin après deux coasts au contact d un grand champ, sans lien de fusion : probable absorption étiquetée sortie"
+exit_edge,2016-12-22 06:05:00,206941,56,2,doute,cellule tronquée qui se dissipe au bord : sortie et mort indiscernables (acceptable)
+exit_edge,2017-01-31 18:30:00,222518,82,2,oui,
+exit_edge,2018-11-06 21:05:00,569313,72,2,doute,"cellule d une trame au bord, coast puis fin au contact d une grande cellule sans lien de fusion"
+entry_missing,2016-02-29 17:05:00,68925,93,3,oui,
+entry_missing,2016-06-23 06:00:00,141410,205,3,oui,
+entry_missing,2018-03-28 02:40:00,486529,106,3,oui,
+entry_missing,2018-09-08 20:00:00,549892,64,3,doute,"probable scission de la piste voisine au bord de la zone manquante, sans lien de scission ; fusion enregistrée 15 min plus tard"
+exit_missing,2016-08-17 21:05:00,151864,50,3,oui,
+exit_missing,2016-08-25 20:05:00,155804,69,3,oui,
+exit_missing,2016-10-16 04:15:00,172122,185,3,oui,
+exit_missing,2017-08-14 21:10:00,315387,49,3,oui,
+merge_end,2016-01-04 00:55:00,5569,168,4,oui,
+merge_end,2016-03-02 04:40:00,69925,451,4,oui,
+merge_end,2016-05-09 01:35:00,111414,96,4,oui,
+merge_end,2018-06-11 16:10:00,528993,1730,4,oui,
+split_start,2016-01-01 13:55:00,559,109,4,oui,
+split_start,2016-02-24 07:15:00,66853,745,4,oui,
+split_start,2017-02-14 00:20:00,234616,340,4,oui,
+split_start,2018-02-13 02:40:00,449302,79,4,oui,
+coast,2016-06-10 10:30:00,129172,138,5,oui,coast à travers une trame entièrement manquante puis fusion enregistrée dans 129122 : correct
+coast,2017-10-21 02:55:00,352976,42,5,oui,
+coast,2017-11-11 23:15:00,365069,62,5,oui,
+coast,2018-06-03 15:20:00,523032,52,5,oui,
+gap_break,2016-11-14 12:10:00,187928,279,5,oui,
+gap_break,2018-04-25 08:35:00,506131,72,5,oui,
+gap_break,2018-04-25 08:35:00,506135,128,5,oui,correct dans les données (dernière détection 08:10) ; le contour rouge à t est une autre piste de teinte proche
+gap_break,2018-04-25 09:20:00,506150,98,5,oui,

@@ -30,6 +30,10 @@ class Frame:
     source: Path | None = None  # fichier npz d'origine (permet de repérer les frontières de fichiers)
 
 
+class NoFramesError(ValueError):
+    """Aucune carte dans l'intervalle demandé (données absentes ou lacunaires)."""
+
+
 def _months_between(start: datetime, end: datetime) -> Iterator[tuple[int, int]]:
     year, month = start.year, start.month
     while (year, month) <= (end.year, end.month):
@@ -49,7 +53,7 @@ def list_files(data_dir: Path, start: datetime, end: datetime) -> list[Path]:
     return [path for _, path in sorted(found)]
 
 
-def _check_step(previous: datetime, current: datetime, step_min: int) -> int:
+def check_step(previous: datetime, current: datetime, step_min: int) -> int:
     """Nombre de pas entre deux instants ; ValueError si non croissant ou non multiple de step_min."""
     seconds = (current - previous).total_seconds()
     if seconds <= 0:
@@ -95,7 +99,7 @@ def _generate(paths: list[Path], start: datetime, end: datetime,
                                      f"différente de celle de dates ({len(dates)})")
                 for i in selected:
                     t = dates[i]
-                    dt_steps = 0 if previous is None else _check_step(previous, t, step_min)
+                    dt_steps = 0 if previous is None else check_step(previous, t, step_min)
                     gap_break = previous is not None and (t - previous).total_seconds() / 60 > max_gap_min
                     pixels = np.array(data[i], dtype=np.int16)  # copie : n'expose pas le gros tableau
                     pixels.setflags(write=False)
@@ -105,4 +109,4 @@ def _generate(paths: list[Path], start: datetime, end: datetime,
         if any(t > end for t in dates):
             break  # fichiers suivants entièrement postérieurs à `end`
     if previous is None:
-        raise ValueError(f"Aucune carte entre {start} et {end} dans les fichiers trouvés")
+        raise NoFramesError(f"Aucune carte entre {start} et {end} dans les fichiers trouvés")

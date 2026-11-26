@@ -1,0 +1,294 @@
+"""Planches de revue visuelle des événements du tracker v2 : échantillon stratifié par type,
+chaque événement en 3 cartes (t-1, t, t+1) de taux de pluie avec contours colorés par piste
+(piste de l'événement en rouge). Seules les cartes utiles sont lues (fenêtres de 3 pas).
+"""
+import logging
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
+
+import matplotlib
+import numpy as np
+import pandas as pd
+from matplotlib.axes import Axes
+from matplotlib.colors import ListedColormap, LogNorm
+from matplotlib.figure import Figure  # API objet : aucun backend global imposé
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch, Rectangle
+from scipy import ndimage as ndi
+
+from cell_delimitation import MISSING, segment
+from frame_stream import Frame, NoFramesError, iter_frames
+from lineage import EVENT_TYPES
+
+logger = logging.getLogger(__name__)
+
+EVENTS_PER_PAGE = 8
+PER_ROW = 2                 # événements par ligne de la planche
+CROP_PX = 64                # côté de la vignette centrée sur la piste
+STEP = timedelta(minutes=5)
+RATE_FACTOR = 12 / 100      # brut MeteoNet -> mm/h
+RATE_MIN, RATE_MAX = 1.0, 60.0   # échelle logarithmique de couleur (mm/h)
+ABSENT_EVENTS = ("death", "exit_edge", "exit_missing", "merge_end", "gap_break", "coast")
+MAX_BACK = 12               # au-delà (cartes), la dernière observation n'est plus cherchée
+MISSING_GREY = "0.78"
+HIGHLIGHT = (1.0, 0.0, 0.0, 1.0)
+OTHERS_UNTRACKED = (0.5, 0.5, 0.5, 1.0)
+CSV_COLUMNS = ["event", "t", "track_id", "area", "page", "ok"]
+
+
+@dataclass(frozen=True)
+class ReviewEvent:
+    """Événement échantillonné pour la revue, avec la page de planche où il figure."""
+    event: str
+    t: datetime
+    track_id: int
+    area: int
+    page: int
+
+
+def sample_events(events: pd.DataFrame, n: int, seed: int) -> pd.DataFrame:
+    """n événements au plus, répartis à tour de rôle entre les types présents (stratifié)."""
+    rng = np.random.default_rng(seed)
+    pools = {}
+    for kind in EVENT_TYPES:
+        idx = np.flatnonzero((events.event == kind).to_numpy())
+        if len(idx):
+            pools[kind] = list(rng.permutation(idx))
+    chosen: list[int] = []
+    while len(chosen) < n and any(pools.values()):
+        for pool in pools.values():
+            if pool and len(chosen) < n:
+                chosen.append(pool.pop())
+    picked = events.iloc[chosen].copy()
+    picked["_order"] = picked.event.map({k: i for i, k in enumerate(EVENT_TYPES)})
+    picked = picked.sort_values(["_order", "t"], kind="stable").drop(columns="_order")
+    return picked.reset_index(drop=True)
+
+
+def _boundaries(labels: np.ndarray) -> np.ndarray:
+    """Pixels de contour : étiquette non nulle ayant un voisin (4-connexité) différent."""
+    pad = np.pad(labels, 1)
+    centre = pad[1:-1, 1:-1]
+    differs = np.zeros(labels.shape, dtype=bool)
+    for sl in (pad[:-2, 1:-1], pad[2:, 1:-1], pad[1:-1, :-2], pad[1:-1, 2:]):
+        differs |= sl != centre
+    return (centre > 0) & differs
+
+
+def overlay(labels: np.ndarray, dets: pd.DataFrame, track_id: int) -> np.ndarray:
+    """Image RGBA des contours : couleur par piste, piste de l'événement en rouge épaissie.
+
+    Les local_id absents de la carte (détections d'une autre carte) sont ignorés, avec alerte."""
+    top = int(labels.max())
+    ids = dets.local_id.to_numpy(int)
+    ok = (ids > 0) & (ids <= top)
+    if not ok.all():
+        logger.warning("%d local_id hors de la carte (max %d) : contours ignorés",
+                       int((~ok).sum()), top)
+    lut = np.zeros(top + 1, dtype=np.int64)
+    lut[ids[ok]] = dets.track_id.to_numpy(int)[ok]
+    tracks = lut[labels]
+    edge = _boundaries(labels)
+    out = np.zeros(labels.shape + (4,))
+    cmap = matplotlib.colormaps["tab20"]
+    for tid in np.unique(tracks[edge]):
+        out[edge & (tracks == tid)] = OTHERS_UNTRACKED if tid == 0 else cmap(int(tid) % 20)
+    if track_id > 0:
+        out[ndi.binary_dilation(edge & (tracks == track_id))] = HIGHLIGHT
+    return out
+
+
+def _crop(centre: tuple[float, float] | None, shape: tuple[int, int]) -> tuple[slice, slice]:
+    if centre is None:
+        return slice(0, shape[0]), slice(0, shape[1])
+    spans = []
+    for c, size in zip(centre, shape):
+        lo = int(min(max(round(c) - CROP_PX // 2, 0), max(size - CROP_PX, 0)))
+        spans.append(slice(lo, min(lo + CROP_PX, size)))
+    return spans[0], spans[1]
+
+
+def anchor_time(detections: pd.DataFrame, track_id: int, t: datetime) -> datetime | None:
+    """Dernière détection de la piste avant t (None si absente ou à plus de MAX_BACK cartes)."""
+    times = detections.timestamp[(detections.track_id == track_id) & (detections.timestamp < t)]
+    if times.empty:
+        return None
+    last = times.max().to_pydatetime()
+    return last if t - last <= MAX_BACK * STEP else None
+
+
+def panel_times(kind: str, t: datetime, anchor: datetime | None
+                ) -> tuple[datetime, datetime, datetime]:
+    """Instants des 3 panneaux. Piste absente à t par définition (fin, coast) : le panneau de
+    gauche est sa dernière détection (anchor), sinon t - 1 pas."""
+    left = anchor if kind in ABSENT_EVENTS and anchor is not None else t - STEP
+    return left, t, t + STEP
+
+
+def predicted_position(last: pd.Series, steps: int) -> tuple[float, float]:
+    """Position à t : dernier centroïde + vitesse x pas écoulés depuis la dernière obs."""
+    return float(last.cy + steps * last.v_y), float(last.cx + steps * last.v_x)
+
+
+def panel_overlay(frame: Frame, dets: pd.DataFrame, track_id: int) -> np.ndarray:
+    """Contours RGBA d'une carte, d'après les seules détections de SON instant (frame.t)."""
+    labels, _, _ = segment(frame.R)
+    here = dets[dets.timestamp == frame.t]
+    if labels.max() == 0 or not len(here):
+        return np.zeros(frame.R.shape + (4,))
+    return overlay(labels, here, track_id)
+
+
+def _read_frames(times: Sequence[datetime], data_dir: Path) -> dict[datetime, Frame]:
+    wanted = set(times)
+    try:
+        return {f.t: f for f in iter_frames(min(wanted), max(wanted), data_dir)
+                if f.t in wanted}
+    except (FileNotFoundError, NoFramesError, ValueError) as exc:
+        logger.warning("%s : cartes illisibles (%s)", min(wanted), exc)
+        return {}
+
+
+def _draw_field(ax: Axes, frame: Frame, ys: slice, xs: slice) -> None:
+    """Taux de pluie (mm/h, échelle log), données manquantes grises hachurées, bord de grille."""
+    cmap = matplotlib.colormaps["turbo"].with_extremes(bad="white")
+    rate = frame.R * RATE_FACTOR
+    rate = np.where((frame.R == MISSING) | (rate < RATE_MIN), np.nan, rate)
+    ax.imshow(rate[ys, xs], cmap=cmap, norm=LogNorm(RATE_MIN, RATE_MAX), interpolation="nearest")
+    miss = (frame.R == MISSING)[ys, xs]
+    if miss.any():
+        ax.imshow(np.where(miss, 1.0, np.nan), cmap=ListedColormap([MISSING_GREY]), vmin=0,
+                  vmax=1, interpolation="nearest")
+        with matplotlib.rc_context({"hatch.color": "0.35", "hatch.linewidth": 0.4}):
+            ax.contourf(miss.astype(float), levels=[0.5, 1.5], colors="none",
+                        hatches=["////"])
+    h, w = frame.R.shape
+    ax.add_patch(Rectangle((-0.5 - xs.start, -0.5 - ys.start), w, h, fill=False, ec="k", lw=1.5))
+    ax.set_xlim(-0.5, xs.stop - xs.start - 0.5)
+    ax.set_ylim(ys.stop - ys.start - 0.5, -0.5)
+
+
+def _draw_panel(ax: Axes, frame: Frame | None, dets: pd.DataFrame, track_id: int,
+                centre: tuple[float, float] | None, title: str,
+                cross: tuple[float, float] | None = None) -> None:
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_title(title, fontsize=7)
+    if frame is None:
+        ax.text(0.5, 0.5, "pas de carte", ha="center", va="center", fontsize=7)
+        return
+    ys, xs = _crop(centre, frame.R.shape)
+    _draw_field(ax, frame, ys, xs)
+    ax.imshow(panel_overlay(frame, dets, track_id)[ys, xs], interpolation="nearest")
+    if cross is not None:
+        ax.plot(cross[1] - xs.start, cross[0] - ys.start, "x", color="red", ms=9, mew=1.5)
+        ax.set_xlim(-0.5, xs.stop - xs.start - 0.5)
+        ax.set_ylim(ys.stop - ys.start - 0.5, -0.5)
+
+
+def _legend(fig: Figure) -> None:
+    handles = [Line2D([], [], color=HIGHLIGHT[:3], lw=2, label="piste de l'événement"),
+               Line2D([], [], color=matplotlib.colormaps["tab20"](2), lw=2,
+                      label="autres pistes (couleurs)"),
+               Line2D([], [], color=OTHERS_UNTRACKED[:3], lw=2, label="non suivie (gris)"),
+               Patch(facecolor=MISSING_GREY, hatch="////", edgecolor="0.35",
+                     label="donnée manquante"),
+               Line2D([], [], color="k", lw=1.5, label="bord de la grille"),
+               Line2D([], [], color="red", marker="x", ls="", label="position prédite à t")]
+    fig.legend(handles=handles, loc="lower center", ncol=6, fontsize=7, frameon=False)
+
+
+def _draw_event(axes_row: Sequence[Axes], ev: pd.Series, number: int, dets: pd.DataFrame,
+                data_dir: Path) -> None:
+    tid = int(ev.track_id)
+    anchor = ev.anchor.to_pydatetime() if pd.notna(ev.anchor) else None
+    left, mid, right = panel_times(ev.event, ev.t, anchor)
+    frames = _read_frames([left, mid, right], data_dir)
+    last = cross = None
+    if anchor is not None and ev.event in ABSENT_EVENTS:
+        rows = dets[(dets.track_id == tid) & (dets.timestamp == left)]
+        if len(rows):
+            last = rows.iloc[0]
+            steps = int(round((mid - left) / STEP))
+            cross = predicted_position(last, steps)
+    centre = (float(last.cy), float(last.cx)) if last is not None else None
+    if centre is None:
+        here = dets[(dets.track_id == tid)]
+        if len(here):
+            row = here.iloc[(here.timestamp - mid).abs().argmin()]
+            centre = (float(row.cy), float(row.cx))
+    steps_back = int(round((mid - left) / STEP))
+    titles = (f"t-{steps_back}" + (" (dern. obs.)" if last is not None else ""),
+              f"#{number} {ev.event} tr={tid} A={ev.area}\n{ev.t:%m-%d %H:%M}", "t+1")
+    for ax, t, title, x in zip(axes_row, (left, mid, right), titles, (None, cross, None)):
+        ax.axis("on")
+        _draw_panel(ax, frames.get(t), dets, tid, centre, title, x)
+
+
+def _draw_page(rows: pd.DataFrame, offset: int, dets: pd.DataFrame, data_dir: Path,
+               path: Path) -> None:
+    n_rows = -(-len(rows) // PER_ROW)
+    fig = Figure(figsize=(3 * 3 * PER_ROW * 0.8, 2.6 * n_rows + 0.5))
+    axes = fig.subplots(n_rows, 3 * PER_ROW, squeeze=False)
+    for ax in axes.ravel():
+        ax.axis("off")
+    for k, ev in enumerate(rows.itertuples(index=False)):
+        r, c = divmod(k, PER_ROW)
+        _draw_event(axes[r, 3 * c:3 * c + 3], pd.Series(ev._asdict()), offset + k + 1, dets,
+                    data_dir)
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    _legend(fig)
+    fig.savefig(path, dpi=70)
+
+
+def _merge_ok(table: pd.DataFrame, path: Path) -> pd.DataFrame:
+    """Reprend les « ok » déjà remplis d'un review_events.csv existant (clé event, t,
+    track_id). Si des lignes remplies ne figurent plus dans le nouvel échantillon, l'ancien
+    fichier est conservé sous review_events.prevN.csv : rien de saisi n'est jamais perdu."""
+    if not path.exists():
+        return table
+    try:
+        old = pd.read_csv(path, dtype={"ok": str}, keep_default_na=False)
+        old["t"] = pd.to_datetime(old.t).astype(str)
+    except (OSError, ValueError, KeyError, pd.errors.ParserError):
+        logger.warning("%s illisible : remplacé", path)
+        return table
+    filled = old[old.ok.str.strip() != ""]
+    key = lambda df: list(zip(df.event, df.t.astype(str), df.track_id.astype(int)))  # noqa: E731
+    if set(key(filled)) - set(key(table)):
+        n = len(list(path.parent.glob("review_events.prev*.csv"))) + 1
+        path.replace(path.with_name(f"review_events.prev{n}.csv"))
+    ok = dict(zip(key(filled), filled.ok))
+    return table.assign(ok=[ok.get(k, "") for k in key(table)])
+
+
+def write_review(events: pd.DataFrame, detections: pd.DataFrame, data_dir: Path, n: int,
+                 seed: int, png_path: Path) -> list[ReviewEvent]:
+    """Planches PNG (<stem>_01.png...) et review_events.csv à côté ; retourne l'échantillon.
+
+    Un review_events.csv existant n'est jamais écrasé : ses « ok » remplis sont conservés."""
+    png_path = Path(png_path)
+    png_path.parent.mkdir(parents=True, exist_ok=True)
+    picked = sample_events(events, n, seed)
+    mine = detections[detections.track_id.isin(picked.track_id)]
+    picked = picked.assign(anchor=[
+        anchor_time(mine, int(r.track_id), r.t) if r.event in ABSENT_EVENTS else None
+        for r in picked.itertuples()]).astype({"anchor": "datetime64[ns]"})
+    needed = {t + s * STEP for t in picked.t for s in (-1, 0, 1)} | set(picked.anchor.dropna())
+    dets = detections[detections.timestamp.isin(needed)]
+    sample = []
+    for p, start in enumerate(range(0, len(picked), EVENTS_PER_PAGE), start=1):
+        rows = picked.iloc[start:start + EVENTS_PER_PAGE]
+        _draw_page(rows, start, dets, Path(data_dir),
+                   png_path.with_name(f"{png_path.stem}_{p:02d}.png"))
+        sample += [ReviewEvent(r.event, r.t.to_pydatetime(), int(r.track_id), int(r.area), p)
+                   for r in rows.itertuples()]
+    table = pd.DataFrame([{**e.__dict__, "ok": ""} for e in sample], columns=CSV_COLUMNS)
+    csv_path = png_path.parent / "review_events.csv"
+    _merge_ok(table.astype({"t": "datetime64[ns]"}), csv_path).to_csv(csv_path, index=False)
+    return sample
+
+
+__all__ = ("EVENTS_PER_PAGE", "ReviewEvent", "overlay", "sample_events", "write_review")

@@ -1,0 +1,23 @@
+{
+  "tracker": {
+    "min_area_start": 50,
+    "min_area_keep": 35,
+    "max_coast": 1,
+    "max_gap_min": 15,
+    "d_max": 25.0,
+    "w_pos": 0.5,
+    "max_cost": 0.75,
+    "f_min": 0.1,
+    "alpha": 0.5,
+    "young_frames": 2,
+    "coarse": 4,
+    "min_peak_ratio": 2.0
+  },
+  "start": "2016-01",
+  "start_time": null,
+  "state_schema": 1,
+  "provenance": {
+    "git_sha": "1bbcd15872b0534038f898d5d23c283609c54b8d",
+    "data_dir": "/Users/noam/Documents/RESEARCH/GAT/DATA"
+  }
+}
