@@ -277,3 +277,24 @@ def test_real_data_crosses_january_file_boundary():
     assert len(frames) == 5
     assert [f.dt_steps for f in frames] == [0, 1, 1, 1, 1]
     assert frames[0].t == start and frames[-1].t == end
+
+
+@pytest.mark.unit
+def test_off_grid_first_frame_is_rejected_before_loading_data(tmp_path):
+    # Arrange : fichier sans clé `data` : tout chargement de data échouerait en KeyError
+    month_dir = tmp_path / "NW_rainfall_2016" / "rainfall-NW-2016-01"
+    month_dir.mkdir(parents=True)
+    dates = np.empty(2, dtype=object)
+    dates[:] = [datetime(2016, 1, 1, 0, 3), datetime(2016, 1, 1, 0, 8)]
+    np.savez(month_dir / "rainfall_NW_2016_01.1.npz", dates=dates)
+    # Act / Assert
+    with pytest.raises(ValueError, match="grille"):
+        list(iter_frames(datetime(2016, 1, 1), datetime(2016, 1, 2), data_dir=tmp_path))
+
+
+@pytest.mark.unit
+def test_frames_carry_their_source_file(tmp_path):
+    times = make_times(2)
+    write_npz_files(tmp_path, [_file(2016, 1, 1, times)])
+    frames = list(iter_frames(times[0], times[-1], data_dir=tmp_path))
+    assert all(f.source is not None and f.source.name == "rainfall_NW_2016_01.1.npz" for f in frames)

@@ -27,6 +27,7 @@ class Frame:
     R: np.ndarray  # int16, -1 = manquant ; copie en lecture seule
     dt_steps: int  # 1 = un pas (5 min) depuis la carte précédente ; 0 pour la première
     gap_break: bool  # True si l'écart dépasse max_gap_min (trajectoires à couper)
+    source: Path | None = None  # fichier npz d'origine (permet de repérer les frontières de fichiers)
 
 
 class NoFramesError(ValueError):
@@ -87,6 +88,10 @@ def _generate(paths: list[Path], start: datetime, end: datetime,
             dates = list(npz["dates"])  # lecture paresseuse : `data` n'est pas encore chargé
             selected = [i for i, t in enumerate(dates) if start <= t <= end]
             if selected:
+                if previous is None:  # première carte : validée avant de charger `data`
+                    first = dates[selected[0]]
+                    if first.second or first.microsecond or first.minute % step_min:
+                        raise ValueError(f"{path.name} : première carte {first} hors de la grille de {step_min} min")
                 logger.info("Chargement de %s (%d cartes retenues)", path.name, len(selected))
                 data = npz["data"]
                 if len(data) != len(dates):
@@ -99,7 +104,7 @@ def _generate(paths: list[Path], start: datetime, end: datetime,
                     pixels = np.array(data[i], dtype=np.int16)  # copie : n'expose pas le gros tableau
                     pixels.setflags(write=False)
                     previous = t
-                    yield Frame(t=t, R=pixels, dt_steps=dt_steps, gap_break=gap_break)
+                    yield Frame(t=t, R=pixels, dt_steps=dt_steps, gap_break=gap_break, source=path)
                 del data
         if any(t > end for t in dates):
             break  # fichiers suivants entièrement postérieurs à `end`

@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 import variable_source_fit as vsf  # noqa: E402
 from cell_delimitation import load_frames, segment, MIN_RATE_MM_H  # noqa: E402
-from cell_dataset import MIN_AREA  # noqa: E402
+from cell_dataset import MIN_AREA, raw_to_rate  # noqa: E402
 
 START = datetime(2016, 1, 1, 12, 0)
 CELL_AREA_RANGE = (1000, 5000)  # a mid-sized cell: complex enough to need several sources
@@ -35,6 +35,11 @@ PX_KM2 = 0.8
 DETECTIONS = ROOT / "archive" / "E0_segmentation_tracking" / "results" / "T1_detections.csv"
 OUT = ROOT / "docs" / "figures" / "00_pipeline.png"
 INK, MUTED, ACCENT, ACCENT2, NODE = "#0b0b0b", "#52514e", "#eb6834", "#2a78d6", "#9fb8d9"
+
+
+def rate_map(R):
+    """Taux (mm/h), NaN hors pluie ; conversion int32 (int16 déborde au-delà de 2730)."""
+    return np.where(R > 0, raw_to_rate(R), np.nan)
 
 
 def softplus(v):
@@ -209,7 +214,7 @@ def main():
     box = dict(xy=(sl[1].start - 6, sl[0].start - 6), width=sl[1].stop - sl[1].start + 12,
                height=sl[0].stop - sl[0].start + 12, fill=False, ec=ACCENT, lw=1.6)
 
-    panel_image(ax1, np.where(R > 0, R * 12 / 100, np.nan), "① Radar rain rate (MeteoNet, 5 min, ~1 km)",
+    panel_image(ax1, rate_map(R), "① Radar rain rate (MeteoNet, 5 min, ~1 km)",
                 LogNorm(0.1, 30))
     shade_missing(ax1, valid)
     ax1.add_patch(Rectangle(**box))

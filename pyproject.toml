@@ -3,5 +3,6 @@ pythonpath = ["src", "scripts"]
 testpaths = ["tests"]
 markers = [
     "unit: tests rapides, sans données externes",
+    "benchmark: mesures de temps, ignorées sauf RUN_BENCH=1",
     "integration: tests qui lisent le dépôt (git, fichiers archivés)",
 ]
